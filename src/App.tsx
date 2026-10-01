@@ -81,7 +81,10 @@ export default function App() {
       const dt = lastFrameRef.current ? Math.min(60, now - lastFrameRef.current) : 16;
       lastFrameRef.current = now;
       const breath = breathRef.current?.update(now) ?? 0;
-      if (breath > 0.03) fog.setIntensity(fog.intensity + breath * dt * 0.00034);
+      if (breath > 0.03) {
+        fog.setIntensity(fog.intensity + breath * dt * 0.00034);
+        fog.refog(breath * dt * 40);
+      }
       else if (fog.intensity > 0) fog.setIntensity(fog.intensity - dt * 0.0000007);
 
       if (stageRef.current === 'blow' && fog.intensity > 0.28) changeStage('raise');

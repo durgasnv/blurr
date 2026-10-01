@@ -1,4 +1,4 @@
-export type Point = { x: number; y: number; at: number };
+export type Point = { x: number; y: number; at: number; ageOffset: number };
 
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
@@ -35,7 +35,7 @@ export class FogCanvas {
   }
 
   addPoint(x: number, y: number, at: number, connect: boolean) {
-    const next = { x: clamp(x), y: clamp(y), at };
+    const next = { x: clamp(x), y: clamp(y), at, ageOffset: 0 };
     const previous = this.points.at(-1);
     if (connect && previous && at - previous.at < 95) {
       const distance = Math.hypot((next.x - previous.x) * this.width, (next.y - previous.y) * this.height);
@@ -47,10 +47,17 @@ export class FogCanvas {
           x: previous.x + (next.x - previous.x) * t,
           y: previous.y + (next.y - previous.y) * t,
           at: previous.at + (at - previous.at) * t,
+          ageOffset: 0,
         });
       }
     }
     this.points.push(next);
+    this.dirty = true;
+  }
+
+  refog(elapsedMs: number) {
+    if (this.points.length === 0) return;
+    for (const point of this.points) point.ageOffset += elapsedMs;
     this.dirty = true;
   }
 
@@ -60,7 +67,7 @@ export class FogCanvas {
     if (now - this.lastRender < (hasTrails ? 32 : 80)) return;
     this.lastRender = now;
     this.dirty = false;
-    this.points = this.points.filter(point => now - point.at < 20000);
+    this.points = this.points.filter(point => now - point.at + point.ageOffset < 20000);
 
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.width, this.height);
@@ -73,7 +80,7 @@ export class FogCanvas {
     // A pale, wet rim sits just outside each wiped point.
     const radius = clamp(Math.min(this.width, this.height) * 0.026, 17, 33);
     for (const point of this.points) {
-      const age = now - point.at;
+      const age = now - point.at + point.ageOffset;
       const life = age < 10000 ? 1 : clamp((20000 - age) / 10000);
       if (life <= 0) continue;
       const x = point.x * this.width;
@@ -91,7 +98,7 @@ export class FogCanvas {
     // Destination-out removes the fog itself; partial alpha restores it over time.
     ctx.globalCompositeOperation = 'destination-out';
     for (const point of this.points) {
-      const age = now - point.at;
+      const age = now - point.at + point.ageOffset;
       const life = age < 10000 ? 1 : clamp((20000 - age) / 10000);
       if (life <= 0) continue;
       const x = point.x * this.width;
