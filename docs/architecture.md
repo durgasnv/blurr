@@ -2,13 +2,13 @@
 
 ## Startup and permissions
 
-React owns the instruction stages and the permission button. A click calls `getUserMedia()` once with a front-facing camera and microphone. The stream feeds a hidden `<video>` and a Web Audio `MediaStreamAudioSourceNode`. Permission rejection and missing devices produce recoverable messages. Camera tracks stop and the audio context closes on teardown. Browser permission access requires HTTPS or localhost.
+React owns the instruction stages and the permission button. A click calls `getUserMedia()` once with a front-facing camera and microphone. The stream feeds a fullscreen, mirrored `<video>` behind the fog Canvas and a Web Audio `MediaStreamAudioSourceNode`. Permission rejection and missing devices produce recoverable messages. Camera tracks stop and the audio context closes on teardown. Browser permission access requires HTTPS or localhost.
 
-The MediaPipe Hand Landmarker model and WASM runtime load after permission is granted. GPU is attempted first, then CPU. The hosted model and runtime must be reachable during startup. `?debug` shows the mirrored video preview; it is hidden normally.
+The MediaPipe Hand Landmarker model and WASM runtime load after permission is granted. GPU is attempted first, then CPU. The hosted model and runtime must be reachable during startup. `?debug` adds a small mirrored video preview with landmarks.
 
 ## Hand-to-canvas pipeline
 
-`requestAnimationFrame` drives the loop. MediaPipe `detectForVideo(video, timestamp)` runs only when `video.currentTime` changes. It yields normalized landmarks; landmark 8 is the index tip. The horizontal coordinate is inverted (`1 - x`) to match a mirrored, front-facing camera. The normalized position is stored independently of viewport pixels, so resizes retain the stroke layout.
+`requestAnimationFrame` drives the loop. MediaPipe `detectForVideo(video, timestamp)` runs only when `video.currentTime` changes. It yields normalized landmarks; landmark 8 is the index tip. The video fills the viewport with `object-fit: cover`, so its visible crop is computed from the camera and viewport aspect ratios. The fingertip is mapped through that crop, then mirrored horizontally. Points outside the visible crop are ignored. The final normalized screen position is stored independently of viewport pixels, so resizes retain the stroke layout.
 
 The tip is smoothed with a time-based exponential filter. It reacts smoothly across different camera frame rates. Hand loss for 180 ms resets the filter and gesture so returning hands cannot connect to an old stroke. The index-only classifier compares tip-to-wrist distance with the middle finger joint and requires the index to be extended while the middle, ring, and pinky are lowered. Three consecutive positive detections enter DRAW; two negative detections leave it. An open palm and a fist both become IDLE. These rules are simple geometry, not a trained gesture model.
 
@@ -20,6 +20,6 @@ An `AnalyserNode` reads waveform and FFT bins each frame. RMS measures amplitude
 
 ## Fog and regeneration
 
-`FogCanvas` creates a half-resolution procedural texture with per-pixel grain, cloudy radial gradients, and tiny droplets. It scales that texture over the main Canvas according to accumulated breath. Cleared points are stored with their timestamps. At render time, a faint wet rim is added, then soft circles erase the fog using `destination-out`. Full clearing lasts ten seconds and fades to zero over the next ten. Rendering is throttled to about 30 FPS while trails age; camera analysis still follows `requestAnimationFrame`. Pixel ratio is capped at 1.7 to protect mobile fill rate. Resize rebuilds the texture but preserves normalized trail points.
+`FogCanvas` creates a half-resolution procedural texture with per-pixel grain, cloudy radial gradients, and tiny droplets. It scales that texture over the live reflection according to accumulated breath. Cleared points are stored with timestamps and a separate re-fog age offset. At render time, a faint wet rim is added, then soft circles erase the fog using `destination-out`. Full clearing lasts ten seconds and fades to zero over the next ten. A new sustained blow increases the age offset, causing cleared paths to cloud over again within a breath or two. Rendering is throttled to about 30 FPS while trails age; camera analysis still follows `requestAnimationFrame`. Pixel ratio is capped at 1.7 to protect mobile fill rate. Resize rebuilds the texture but preserves normalized trail points.
 
-The darker bathroom scene is CSS; the condensation and wiped paths are Canvas 2D. GSAP animates instruction changes. The permission button is the only required touch/click interaction, because browsers require a user gesture to start media capture.
+The darker bathroom scene is a CSS fallback before permission; the live video becomes the mirror after camera access. The condensation and wiped paths are Canvas 2D. GSAP animates instruction changes. The permission button is the only required touch/click interaction, because browsers require a user gesture to start media capture.

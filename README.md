@@ -1,6 +1,6 @@
 # Blurr
 
-A touchless, cinematic bathroom mirror. Blow toward the microphone to fog the glass, then hold up only your index finger and draw in the air to wipe a path through the condensation. Open your palm or make a fist to pause. The fog returns gradually.
+A touchless, cinematic bathroom mirror. Your live, mirrored camera image is the reflection. Blow toward the microphone to fog the glass, then hold up only your index finger and draw in the air to wipe a path through the condensation. Open your palm or make a fist to pause. The fog returns gradually, and another blow clouds cleared drawings again.
 
 ## Run
 
@@ -16,9 +16,9 @@ Open the local address shown by Vite. Use `npm run build` for a production build
 1. Select **Enable camera + microphone**. This button only starts permission requests; drawing has no pointer input.
 2. Blow steadily toward the microphone until the mirror clouds over. A short clap should not count.
 3. Hold up your index finger with the other fingers folded, then move it in front of the camera to clear the fog.
-4. Open your palm or close your fist to reposition without drawing.
+4. Open your palm or close your fist to reposition without drawing. Blow again to fog over a drawing.
 
-Add `?debug` to the URL to see a small, mirrored camera preview. Camera and microphone data are processed locally in the browser. The MediaPipe runtime and model come from their hosted URLs.
+Add `?debug` to the URL to see a small camera preview with hand landmarks in addition to the fullscreen reflection. Camera and microphone data are processed locally in the browser. The MediaPipe runtime and model come from their hosted URLs.
 
 ## How it works
 
