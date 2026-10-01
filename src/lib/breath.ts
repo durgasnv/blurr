@@ -9,6 +9,10 @@ export class BreathDetector {
   private lastAt = 0;
   private active = false;
   level = 0;
+  rms = 0;
+  flatness = 0;
+  highRatio = 0;
+  candidateDuration = 0;
 
   constructor(stream: MediaStream) {
     this.context = new AudioContext();
@@ -31,6 +35,7 @@ export class BreathDetector {
     let energy = 0;
     for (const value of this.waveform) energy += value * value;
     const rms = Math.sqrt(energy / this.waveform.length);
+    this.rms = rms;
 
     const hzPerBin = this.context.sampleRate / this.analyser.fftSize;
     let total = 0, high = 0, logSum = 0, bins = 0;
@@ -45,11 +50,14 @@ export class BreathDetector {
     }
     const flatness = Math.exp(logSum / bins) / (total / bins + 0.001);
     const highRatio = high / (total + 0.001);
-    const likelyBreath = rms > Math.max(0.018, this.noiseFloor * 2.4)
+    this.flatness = flatness;
+    this.highRatio = highRatio;
+    const likelyBreath = rms > Math.max(0.006, this.noiseFloor * 1.8)
       && flatness > 0.28 && highRatio > 0.32;
 
     if (!likelyBreath) this.noiseFloor += (Math.min(rms, 0.07) - this.noiseFloor) * 0.012;
     this.candidateMs = likelyBreath ? Math.min(1000, this.candidateMs + dt) : Math.max(0, this.candidateMs - dt * 2);
+    this.candidateDuration = this.candidateMs;
     this.active = this.candidateMs >= 280;
     const target = this.active ? Math.min(1, (rms - this.noiseFloor) * 12 + 0.22) : 0;
     this.level += (target - this.level) * (this.active ? 0.18 : 0.1);
