@@ -36,7 +36,7 @@ export class FogCanvas {
   addPoint(x: number, y: number, at: number, connect: boolean) {
     const next = { x: clamp(x), y: clamp(y), at };
     const previous = this.points.at(-1);
-    if (connect && previous && at - previous.at < 180) {
+    if (connect && previous && at - previous.at < 95) {
       const distance = Math.hypot((next.x - previous.x) * this.width, (next.y - previous.y) * this.height);
       const step = Math.max(3, Math.min(this.width, this.height) * 0.009);
       const count = Math.ceil(distance / step);

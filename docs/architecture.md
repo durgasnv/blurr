@@ -12,7 +12,7 @@ The MediaPipe Hand Landmarker model and WASM runtime load after permission is gr
 
 The tip is smoothed with a time-based exponential filter. It reacts smoothly across different camera frame rates. Hand loss for 180 ms resets the filter and gesture so returning hands cannot connect to an old stroke. The index-only classifier compares tip-to-wrist distance with the middle finger joint and requires the index to be extended while the middle, ring, and pinky are lowered. Three consecutive positive detections enter DRAW; two negative detections leave it. An open palm and a fist both become IDLE. These rules are simple geometry, not a trained gesture model.
 
-During DRAW, every tracked tip location is added to the fog engine. Intermediate points are inserted at roughly nine-pixel spacing, keeping fast movements continuous. No mouse, pointer, touch, stylus, or keyboard drawing listener exists.
+During DRAW, every tracked tip location is added to the fog engine. Intermediate points are inserted at roughly nine-pixel spacing, keeping fast movements continuous. Points more than 95 ms apart are not joined, avoiding a long accidental line after a camera stall. No mouse, pointer, touch, stylus, or keyboard drawing listener exists.
 
 ## Breath-to-fog pipeline
 

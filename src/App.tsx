@@ -201,7 +201,7 @@ export default function App() {
       <footer className="footer">
         <span>YOUR BREATH IS THE BRUSH</span>
         <div className="footer-center"><span>01</span><i /><span>02</span><i /><span>03</span></div>
-        <span>OPEN PALM TO PAUSE</span>
+        <span>OPEN PALM OR FIST TO PAUSE</span>
       </footer>
     </main>
   );
