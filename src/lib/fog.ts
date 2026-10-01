@@ -21,8 +21,9 @@ export class FogCanvas {
   }
 
   resize() {
-    this.width = Math.max(1, window.innerWidth);
-    this.height = Math.max(1, window.innerHeight);
+    const bounds = this.canvas.parentElement?.getBoundingClientRect();
+    this.width = Math.max(1, Math.round(bounds?.width ?? window.innerWidth));
+    this.height = Math.max(1, Math.round(bounds?.height ?? window.innerHeight));
     this.dpr = Math.min(window.devicePixelRatio || 1, 1.7);
     this.canvas.width = Math.round(this.width * this.dpr);
     this.canvas.height = Math.round(this.height * this.dpr);

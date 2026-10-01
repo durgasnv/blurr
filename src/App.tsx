@@ -11,6 +11,7 @@ type Gesture = 'IDLE' | 'DRAWING';
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const debugVideoRef = useRef<HTMLVideoElement>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
   const copyRef = useRef<HTMLDivElement>(null);
   const fogRef = useRef<FogCanvas | null>(null);
@@ -26,6 +27,7 @@ export default function App() {
   const [gesture, setGesture] = useState<Gesture>('IDLE');
   const [showGesture, setShowGesture] = useState(true);
   const [error, setError] = useState('');
+  const [cameraReady, setCameraReady] = useState(false);
   const debug = new URLSearchParams(window.location.search).has('debug');
 
   const drawDebugLandmarks = (landmarks: NormalizedLandmark[] | null, video: HTMLVideoElement) => {
@@ -138,9 +140,15 @@ export default function App() {
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
       streamRef.current = stream;
-      const video = videoRef.current!;
+      const video = videoRef.current;
+      if (!video) throw new Error('Mirror closed before the camera started');
       video.srcObject = stream;
       await video.play();
+      setCameraReady(true);
+      if (debugVideoRef.current) {
+        debugVideoRef.current.srcObject = stream;
+        void debugVideoRef.current.play().catch(() => undefined);
+      }
       const breath = new BreathDetector(stream);
       breathRef.current = breath;
       await breath.resume();
@@ -149,6 +157,9 @@ export default function App() {
     } catch (cause) {
       streamRef.current?.getTracks().forEach(track => track.stop());
       streamRef.current = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
+      if (debugVideoRef.current) debugVideoRef.current.srcObject = null;
+      setCameraReady(false);
       await breathRef.current?.close();
       breathRef.current = null;
       const name = cause instanceof DOMException ? cause.name : '';
@@ -174,9 +185,11 @@ export default function App() {
   return (
     <main className={`experience stage-${stage}`}>
       <div className="room" aria-hidden="true"><div className="room-light" /><div className="room-shape room-shape-a" /><div className="room-shape room-shape-b" /></div>
+      <video ref={videoRef} className={`mirror-video${cameraReady ? ' is-live' : ''}`} muted playsInline autoPlay aria-hidden="true" />
+      <div className="mirror-shade" aria-hidden="true" />
       <canvas ref={canvasRef} className="fog-canvas" aria-label="Condensation on the mirror" />
       <div className="glass-grain" aria-hidden="true" />
-      <video ref={videoRef} className={debug ? 'camera-preview' : 'camera-hidden'} muted playsInline autoPlay aria-hidden="true" />
+      {debug && <video ref={debugVideoRef} className="camera-preview" muted playsInline autoPlay aria-hidden="true" />}
       {debug && <canvas ref={debugCanvasRef} className="landmark-preview" width="190" height="143" aria-hidden="true" />}
 
       <header className="topbar">

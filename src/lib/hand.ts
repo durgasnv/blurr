@@ -85,8 +85,25 @@ export class HandTracker {
     if (this.candidateFrames >= (rawDraw ? 3 : 2)) this.stableDraw = rawDraw;
 
     const tip = landmarks[8];
-    const x = clamp(1 - tip.x); // Front-facing camera is mirrored for direct manipulation.
-    const y = clamp(tip.y);
+    const bounds = this.video.parentElement?.getBoundingClientRect();
+    const width = bounds?.width || window.innerWidth;
+    const height = bounds?.height || window.innerHeight;
+    // Match CSS object-fit: cover before mirroring. This keeps the wipe aligned
+    // with the visible finger even when the camera is cropped on a wide or tall screen.
+    const scale = Math.max(width / this.video.videoWidth, height / this.video.videoHeight);
+    const displayedWidth = this.video.videoWidth * scale;
+    const displayedHeight = this.video.videoHeight * scale;
+    const offsetX = (width - displayedWidth) / 2;
+    const offsetY = (height - displayedHeight) / 2;
+    const mappedX = (width - (offsetX + tip.x * displayedWidth)) / width;
+    const mappedY = (offsetY + tip.y * displayedHeight) / height;
+    const inside = mappedX >= 0 && mappedX <= 1 && mappedY >= 0 && mappedY <= 1;
+    if (!inside) {
+      this.lose();
+      return { x: this.smoothX, y: this.smoothY, drawing: false, visible: false };
+    }
+    const x = clamp(mappedX);
+    const y = clamp(mappedY);
     const dt = this.lastTime ? Math.min(50, now - this.lastTime) : 16;
     const alpha = 1 - Math.exp(-dt / 42);
     if (!this.hadPosition) { this.smoothX = x; this.smoothY = y; this.hadPosition = true; }
@@ -95,7 +112,7 @@ export class HandTracker {
       this.smoothY += (y - this.smoothY) * alpha;
     }
     this.lastTime = now;
-    return { x: this.smoothX, y: this.smoothY, drawing: this.stableDraw, visible: true };
+    return { x: this.smoothX, y: this.smoothY, drawing: this.stableDraw && inside, visible: inside };
   }
 
   private lose() {
