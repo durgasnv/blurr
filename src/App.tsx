@@ -182,6 +182,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">BLURR<span className="brand-dot">.</span></div>
         <div className="topbar-center">AN INTERACTIVE MIRROR</div>
+        {(stage === 'intro' || stage === 'error') && <button className="topbar-start" onClick={enable} aria-label="Enable camera and microphone">ENABLE ↗</button>}
         <div className="live-mark"><span /> {stage === 'intro' || stage === 'error' ? 'WAITING' : stage === 'loading' ? 'CONNECTING' : 'LIVE'}</div>
       </header>
 
