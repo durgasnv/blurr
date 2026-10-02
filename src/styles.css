@@ -160,6 +160,19 @@ button { font: inherit; }
 }
 .camera-preview { object-fit: cover; transform: scaleX(-1); border: 1px solid rgba(235, 247, 236, 0.45); }
 .landmark-preview { z-index: 10; pointer-events: none; }
+.debug-panel {
+  position: absolute;
+  z-index: 10;
+  left: 20px;
+  bottom: 20px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(230, 245, 228, 0.18);
+  color: #e5f0e2;
+  background: rgba(8, 18, 13, 0.74);
+  font: 10px/1.55 monospace;
+  pointer-events: none;
+}
 
 @media (max-width: 600px) {
   .experience-copy { width: calc(100% - 36px); }

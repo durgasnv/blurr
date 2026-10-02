@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FogCanvas } from './lib/fog';
-import { HandTracker } from './lib/hand';
+import { HandTracker, type HandState } from './lib/hand';
 import { BlowDetector } from './audio/blowDetector';
 import { GlassSurface, type GlassSurfaceHandle } from './components/GlassSurface';
 import { ExperienceOverlay, type Stage } from './components/ExperienceOverlay';
+import { DebugPanel, type DebugPanelHandle } from './components/DebugPanel';
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
 
 type Gesture = 'IDLE' | 'DRAWING';
@@ -14,6 +15,10 @@ export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const debugVideoRef = useRef<HTMLVideoElement>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
+  const debugPanelRef = useRef<DebugPanelHandle>(null);
+  const debugLastAtRef = useRef(0);
+  const debugFramesRef = useRef(0);
+  const debugHandRef = useRef<HandState | null>(null);
   const fogRef = useRef<FogCanvas | null>(null);
   const trackerRef = useRef<HandTracker | null>(null);
   const breathRef = useRef<BlowDetector | null>(null);
@@ -41,7 +46,7 @@ export default function App() {
   const [webglReady, setWebglReady] = useState(false);
   const [hasMist, setHasMist] = useState(false);
   const [whisper, setWhisper] = useState('');
-  const debug = new URLSearchParams(window.location.search).has('debug');
+  const debug = import.meta.env.DEV && new URLSearchParams(window.location.search).has('debug');
   const onWebglReady = useCallback((ready: boolean) => {
     webglReadyRef.current = ready;
     setWebglReady(ready);
@@ -121,6 +126,27 @@ export default function App() {
       if (stageRef.current === 'blow' && fog.intensity > 0.28) changeStage('raise');
       const hand = trackerRef.current?.update(now);
       if (hand) glassRef.current?.setFingertip(hand.visible ? hand : null);
+      if (debug) {
+        if (!debugLastAtRef.current) debugLastAtRef.current = now;
+        debugFramesRef.current++;
+        if (hand) debugHandRef.current = hand.visible ? hand : null;
+        const elapsed = now - debugLastAtRef.current;
+        if (elapsed >= 250) {
+          const tracked = debugHandRef.current;
+          debugPanelRef.current?.update({
+            fps: debugFramesRef.current * 1000 / elapsed,
+            volume: blow?.volume ?? 0,
+            blowStrength: breath,
+            blowDuration: blow?.blowDuration ?? 0,
+            isBlowing: blow?.isBlowing ?? false,
+            gesture: tracked?.gesture ?? 'NO HAND',
+            fingerX: tracked?.x ?? null,
+            fingerY: tracked?.y ?? null,
+          });
+          debugFramesRef.current = 0;
+          debugLastAtRef.current = now;
+        }
+      }
       if (hand?.visible) {
         lastActivityRef.current = now;
         idleShownRef.current = false;
@@ -229,6 +255,7 @@ export default function App() {
       <div className="glass-grain" aria-hidden="true" />
       {debug && <video ref={debugVideoRef} className="camera-preview" muted playsInline autoPlay aria-hidden="true" />}
       {debug && <canvas ref={debugCanvasRef} className="landmark-preview" width="190" height="143" aria-hidden="true" />}
+      {debug && <DebugPanel ref={debugPanelRef} />}
 
       <ExperienceOverlay stage={stage} hasMist={hasMist} error={error} gesture={gesture} showGesture={showGesture} whisper={whisper} onEnable={enable} />
     </main>
