@@ -13,6 +13,7 @@ import fragmentShader from '../shaders/glass.frag?raw';
 import noiseShader from '../shaders/noise.glsl?raw';
 import backgroundShader from '../shaders/background.glsl?raw';
 import { FogMask } from '../simulation/fogMask';
+import { DropletSimulation } from '../simulation/droplets';
 import { viewportToGlassUv, type GlassUv, type ViewportPoint } from '../vision/coordinateMapper';
 
 export type GlassSurfaceHandle = {
@@ -48,6 +49,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     renderer.setClearColor(0x000000, 0);
     const bounds = canvas.parentElement?.getBoundingClientRect();
     const fogMask = new FogMask(renderer, bounds?.width ?? window.innerWidth, bounds?.height ?? window.innerHeight);
+    const droplets = new DropletSimulation();
     const scene = new Scene();
     const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
     camera.position.z = 1;
@@ -61,6 +63,8 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
         uFinger: { value: new Vector2(-1, -1) },
         uDebugFinger: { value: debug ? 1 : 0 },
         uAspect: { value: 1 },
+        uDrops: { value: droplets.positions },
+        uDropCount: { value: 0 },
       },
       transparent: true,
       depthWrite: false,
@@ -96,6 +100,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       lastDrawUv = uv;
       lastDrawAt = at;
       wetUntil = at + 6000;
+      droplets.disturb(uv);
       renderer.render(scene, camera);
     };
 
@@ -114,6 +119,8 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
         material.uniforms.uFogMask.value = fogMask.texture;
       }
       if (estimatedFog < 0.005) return;
+      droplets.update(frameMs / 1000, estimatedFog);
+      material.uniforms.uDropCount.value = droplets.count;
       material.uniforms.uTime.value = now * 0.001;
       renderer.render(scene, camera);
     });
