@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { FogCanvas } from './lib/fog';
 import { HandTracker } from './lib/hand';
-import { BreathDetector } from './lib/breath';
+import { BlowDetector } from './audio/blowDetector';
 import { GlassSurface, type GlassSurfaceHandle } from './components/GlassSurface';
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
 
@@ -18,7 +18,7 @@ export default function App() {
   const copyRef = useRef<HTMLDivElement>(null);
   const fogRef = useRef<FogCanvas | null>(null);
   const trackerRef = useRef<HandTracker | null>(null);
-  const breathRef = useRef<BreathDetector | null>(null);
+  const breathRef = useRef<BlowDetector | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const stageRef = useRef<Stage>('intro');
   const lastPointRef = useRef(false);
@@ -82,7 +82,7 @@ export default function App() {
     const tick = (now: number) => {
       const dt = lastFrameRef.current ? Math.min(60, now - lastFrameRef.current) : 16;
       lastFrameRef.current = now;
-      const breath = breathRef.current?.update(now) ?? 0;
+      const breath = breathRef.current?.update(now).blowStrength ?? 0;
       if (breath > 0.03) {
         fog.setIntensity(fog.intensity + breath * dt * 0.00034);
         fog.refog(breath * dt * 0.004);
@@ -157,7 +157,7 @@ export default function App() {
         debugVideoRef.current.srcObject = stream;
         void debugVideoRef.current.play().catch(() => undefined);
       }
-      const breath = new BreathDetector(stream);
+      const breath = new BlowDetector(stream);
       breathRef.current = breath;
       await breath.resume();
       trackerRef.current = await HandTracker.create(video, debug ? drawDebugLandmarks : undefined);
