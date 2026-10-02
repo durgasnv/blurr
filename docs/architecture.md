@@ -2,7 +2,7 @@
 
 ## Startup and privacy
 
-`App.tsx` owns the permission button and the experience stages. A user click requests a front-facing camera and microphone with `getUserMedia()`. The camera video is hidden in the normal V2 scene; it is used by MediaPipe's Hand Landmarker. A Web Audio source reads microphone samples. Audio and video stay in the browser. The hand model and WASM runtime load from hosted URLs after permission is granted.
+`App.tsx` owns the permission button and the experience stages. A user click requests a front-facing camera and microphone with `getUserMedia()`. The live camera video becomes the visible mirror reflection through a Three.js `VideoTexture`, and MediaPipe's Hand Landmarker reads the same video element. A Web Audio source reads microphone samples. Audio and video stay in the browser. The hand model and WASM runtime load from hosted URLs after permission is granted.
 
 The Three.js glass and MediaPipe tracker are loaded as separate JavaScript chunks. If startup is interrupted, the media tracks, audio context, and tracker are released. If WebGL cannot start, the existing Canvas 2D fog and mirrored video provide a fallback. `?debug` works only with Vite's development build.
 
@@ -24,7 +24,7 @@ The mask shader in `src/shaders/fogMask.frag` grows mist from the center as sust
 
 ## Glass and water
 
-`src/components/GlassSurface.tsx` manages the Three.js scene, fullscreen plane, renderer, animation loop, resize observer, and disposal. `src/shaders/glass.frag` samples the fog mask and layered noise. It shifts coordinates of an abstract room background to mimic refraction, softens fogged regions, scatters light, and shades wet rims. Cleared regions use less displacement and look sharper.
+`src/components/GlassSurface.tsx` manages the Three.js scene, fullscreen plane, renderer, animation loop, resize observer, and disposal. `src/shaders/glass.frag` samples the fog mask and layered noise. Before permission, the shader shows an abstract room. When video frames arrive, it samples the mirrored camera texture with the same center crop used by hand tracking. Fog shifts and softens that reflection, scatters light, and shades wet rims. Cleared regions use less displacement and look sharper.
 
 `src/simulation/droplets.ts` maintains a small fixed pool of droplets. Larger drops can move downward; nearby drops can merge; drawing can disturb them. The glass shader uses their positions for lens distortion, highlights, and darker edges. It does not draw a field of obvious particle circles.
 

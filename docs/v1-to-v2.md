@@ -20,7 +20,7 @@ V1's limits are visual and architectural: fog is an alpha texture over the refle
 | Condensation state | One global intensity plus timestamped clear points | Persistent spatial fog mask, preferably GPU render targets with ping-pong updates |
 | Breath response | Global intensity increases | Mist appears locally, spreads organically, and accumulates across breaths |
 | Cleared strokes | Soft erased circles and faint rims | Mask erasure with wet boundaries, displaced moisture, and sharper optical reveal |
-| Background | Mirrored camera reflection and CSS room fallback | Abstract atmospheric depth behind refractive glass; camera primarily supports vision |
+| Background | Mirrored camera reflection and CSS room fallback | Mirrored camera reflection sampled through refractive glass; abstract room before permission |
 | Water | Static procedural texture marks | Varied integrated droplets, occasional merging and gravity driven movement |
 | Experience design | Large staged instructions and visible status | Nearly empty opening, lowercase microcopy, subtle onboarding and rare reactions |
 | Architecture | Three library modules plus orchestration in `App.tsx` | Separate components, vision, audio, simulation, shaders, hooks, and performance utilities |
