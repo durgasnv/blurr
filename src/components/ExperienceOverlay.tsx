@@ -51,7 +51,7 @@ export function ExperienceOverlay({ stage, hasMist, error, touchState, showGestu
           {(stage === 'intro' || stage === 'error') && (
             <button className="permission-button" onClick={onEnable}>enable camera + mic</button>
           )}
-          {stage === 'intro' && <small>camera + mic stay on your device.</small>}
+          {stage === 'intro' && <small>camera + mic stay on your device. nothing is uploaded.</small>}
         </div>
       )}
       {(stage === 'draw' || stage === 'experience') && whisper && <div className="experience-whisper" aria-live="polite">{whisper}</div>}
