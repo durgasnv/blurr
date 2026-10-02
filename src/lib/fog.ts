@@ -76,6 +76,12 @@ export class FogCanvas {
     this.dirty = true;
   }
 
+  clearDrawing() {
+    this.points = [];
+    this.lastWipe = null;
+    this.dirty = true;
+  }
+
   render(now: number) {
     const hasTrails = this.points.length > 0;
     if (!this.dirty && !hasTrails) return;

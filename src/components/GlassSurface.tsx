@@ -22,28 +22,37 @@ import { chooseQuality } from '../utils/performance';
 export type GlassSurfaceHandle = {
   addBreath: (strength: number, dt: number, duration: number) => void;
   setFingertip: (point: ViewportPoint | null, touching?: boolean) => void;
-  drawAt: (point: ViewportPoint, at: number, connect: boolean) => void;
+  drawAt: (point: ViewportPoint, at: number, connect: boolean, brushSize?: number) => void;
   wipeAt: (point: ViewportPoint, radius: number, at: number, connect: boolean) => void;
   setDrawing: (active: boolean) => void;
   setBreathCenter: (point: ViewportPoint) => void;
+  clearDrawing: () => void;
+  reset: () => void;
+  savePng: () => void;
 };
 
 export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onReady: (ready: boolean) => void; video: RefObject<HTMLVideoElement | null> }>(function GlassSurface({ debug, onReady, video }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const addBreathRef = useRef<(strength: number, dt: number, duration: number) => void>(() => undefined);
   const setFingertipRef = useRef<(point: ViewportPoint | null) => void>(() => undefined);
-  const drawAtRef = useRef<(point: ViewportPoint, at: number, connect: boolean) => void>(() => undefined);
+  const drawAtRef = useRef<(point: ViewportPoint, at: number, connect: boolean, brushSize: number) => void>(() => undefined);
   const wipeAtRef = useRef<(point: ViewportPoint, radius: number, at: number, connect: boolean) => void>(() => undefined);
   const setDrawingRef = useRef<(active: boolean) => void>(() => undefined);
   const setBreathCenterRef = useRef<(point: ViewportPoint) => void>(() => undefined);
+  const clearDrawingRef = useRef<() => void>(() => undefined);
+  const resetRef = useRef<() => void>(() => undefined);
+  const savePngRef = useRef<() => void>(() => undefined);
 
   useImperativeHandle(ref, () => ({
     addBreath: (strength, dt, duration) => addBreathRef.current(strength, dt, duration),
     setFingertip: point => setFingertipRef.current(point),
-    drawAt: (point, at, connect) => drawAtRef.current(point, at, connect),
+    drawAt: (point, at, connect, brushSize = 15) => drawAtRef.current(point, at, connect, brushSize),
     wipeAt: (point, radius, at, connect) => wipeAtRef.current(point, radius, at, connect),
     setDrawing: active => setDrawingRef.current(active),
     setBreathCenter: point => setBreathCenterRef.current(point),
+    clearDrawing: () => clearDrawingRef.current(),
+    reset: () => resetRef.current(),
+    savePng: () => savePngRef.current(),
   }), []);
 
   useEffect(() => {
@@ -128,7 +137,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       material.uniforms.uFinger.value.set(uv.x, uv.y);
       if (debug) renderer.render(scene, camera);
     };
-    drawAtRef.current = (point, at, connect) => {
+    drawAtRef.current = (point, at, connect, brushSize) => {
       const uv = viewportToGlassUv(point);
       const canConnect = connect && lastDrawUv && at - lastDrawAt < 250
         && Math.hypot(uv.x - lastDrawUv.x, uv.y - lastDrawUv.y) <= 0.3;
@@ -136,7 +145,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       if (canConnect && Math.abs(uv.x - from.x) < 0.0006 && Math.abs(uv.y - from.y) < 0.0006) return;
       const elapsed = Math.max(16, at - lastDrawAt) / 1000;
       const speed = Math.hypot((uv.x - from.x) * material.uniforms.uAspect.value, uv.y - from.y) / elapsed;
-      const radius = (15 - Math.min(4, speed * 2)) / viewportHeight;
+      const radius = (brushSize - Math.min(brushSize * 0.27, speed * 2)) / viewportHeight;
       const strength = 0.95 - Math.min(0.18, speed * 0.05);
       fogMask.eraseSegment(from, uv, material.uniforms.uAspect.value, radius, strength);
       material.uniforms.uFogMask.value = fogMask.texture;
@@ -161,6 +170,30 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     };
     setDrawingRef.current = active => { isDrawing = active; };
     setBreathCenterRef.current = point => fogMask.setBlowCenter(viewportToGlassUv(point));
+    clearDrawingRef.current = () => {
+      fogMask.restoreDrawing();
+      material.uniforms.uFogMask.value = fogMask.texture;
+      lastDrawUv = null;
+      lastWipePoint = null;
+      renderer.render(scene, camera);
+    };
+    resetRef.current = () => {
+      fogMask.reset();
+      estimatedFog = 0;
+      pendingGrowth = 0;
+      lastDrawUv = null;
+      lastWipePoint = null;
+      material.uniforms.uFogMask.value = fogMask.texture;
+      material.uniforms.uHasCamera.value = 0;
+      renderer.render(scene, camera);
+    };
+    savePngRef.current = () => {
+      renderer.render(scene, camera);
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL('image/png');
+      link.download = 'blurr.png';
+      link.click();
+    };
 
     renderer.setAnimationLoop(now => {
       if (document.hidden || now - lastRenderAt < quality.frameInterval) return;
@@ -233,6 +266,9 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       wipeAtRef.current = () => undefined;
       setDrawingRef.current = () => undefined;
       setBreathCenterRef.current = () => undefined;
+      clearDrawingRef.current = () => undefined;
+      resetRef.current = () => undefined;
+      savePngRef.current = () => undefined;
       observer.disconnect();
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('webglcontextlost', onContextLost);

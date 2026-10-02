@@ -36,6 +36,7 @@ export class FogMask {
       uBlowSeed: { value: 0 },
       uWetDecay: { value: 0 },
       uRegeneration: { value: 0 },
+      uRestoreAll: { value: 0 },
       uTexel: { value: new Vector2(1, 1) },
       uEraseFrom: { value: new Vector2(-10, -10) },
       uEraseTo: { value: new Vector2(-10, -10) },
@@ -74,6 +75,29 @@ export class FogMask {
 
   setBlowCenter(center: GlassUv) {
     this.material.uniforms.uBlowCenter.value.set(center.x, center.y);
+  }
+
+  restoreDrawing() {
+    this.material.uniforms.uGrowth.value = 0;
+    this.material.uniforms.uWetDecay.value = 0;
+    this.material.uniforms.uRegeneration.value = 0;
+    this.material.uniforms.uEraseStrength.value = 0;
+    this.material.uniforms.uRestoreAll.value = 1;
+    this.step();
+    this.material.uniforms.uRestoreAll.value = 0;
+  }
+
+  reset() {
+    const oldTarget = this.renderer.getRenderTarget();
+    const oldColor = this.renderer.getClearColor(new Color());
+    const oldAlpha = this.renderer.getClearAlpha();
+    this.renderer.setClearColor(0x000000, 1);
+    this.renderer.setRenderTarget(this.read);
+    this.renderer.clear();
+    this.renderer.setRenderTarget(this.write);
+    this.renderer.clear();
+    this.renderer.setRenderTarget(oldTarget);
+    this.renderer.setClearColor(oldColor, oldAlpha);
   }
 
   advance(growth: number, duration: number, wetDecay = 0, regeneration = 0) {

@@ -5,6 +5,7 @@ uniform vec2 uBlowCenter;
 uniform float uBlowSeed;
 uniform float uWetDecay;
 uniform float uRegeneration;
+uniform float uRestoreAll;
 uniform vec2 uTexel;
 uniform vec2 uEraseFrom;
 uniform vec2 uEraseTo;
@@ -18,6 +19,10 @@ void main() {
   float fog = previous.r;
   float wet = max(0.0, previous.g - uWetDecay);
   float memory = previous.b;
+  if (uRestoreAll > 0.5) {
+    fog = memory;
+    wet = 0.0;
+  }
   if (uGrowth > 0.0) {
     float blobs = 0.0;
     for (int i = 0; i < 12; i++) {
