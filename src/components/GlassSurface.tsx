@@ -25,6 +25,7 @@ export type GlassSurfaceHandle = {
   drawAt: (point: ViewportPoint, at: number, connect: boolean) => void;
   wipeAt: (point: ViewportPoint, radius: number, at: number, connect: boolean) => void;
   setDrawing: (active: boolean) => void;
+  setBreathCenter: (point: ViewportPoint) => void;
 };
 
 export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onReady: (ready: boolean) => void; video: RefObject<HTMLVideoElement | null> }>(function GlassSurface({ debug, onReady, video }, ref) {
@@ -34,6 +35,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
   const drawAtRef = useRef<(point: ViewportPoint, at: number, connect: boolean) => void>(() => undefined);
   const wipeAtRef = useRef<(point: ViewportPoint, radius: number, at: number, connect: boolean) => void>(() => undefined);
   const setDrawingRef = useRef<(active: boolean) => void>(() => undefined);
+  const setBreathCenterRef = useRef<(point: ViewportPoint) => void>(() => undefined);
 
   useImperativeHandle(ref, () => ({
     addBreath: (strength, dt, duration) => addBreathRef.current(strength, dt, duration),
@@ -41,6 +43,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     drawAt: (point, at, connect) => drawAtRef.current(point, at, connect),
     wipeAt: (point, radius, at, connect) => wipeAtRef.current(point, radius, at, connect),
     setDrawing: active => setDrawingRef.current(active),
+    setBreathCenter: point => setBreathCenterRef.current(point),
   }), []);
 
   useEffect(() => {
@@ -100,6 +103,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     let lastWipePoint: ViewportPoint | null = null;
     let lastWipeAt = 0;
     let isDrawing = false;
+    let breathFrame = 0;
     let videoWidth = 0;
     let videoHeight = 0;
     let viewportWidth = 1;
@@ -156,6 +160,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       renderer.render(scene, camera);
     };
     setDrawingRef.current = active => { isDrawing = active; };
+    setBreathCenterRef.current = point => fogMask.setBlowCenter(viewportToGlassUv(point));
 
     renderer.setAnimationLoop(now => {
       if (document.hidden || now - lastRenderAt < quality.frameInterval) return;
@@ -169,7 +174,8 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
         updateVideoCrop();
       }
       material.uniforms.uHasCamera.value = hasCamera ? 1 : 0;
-      const growing = !isDrawing && pendingGrowth >= fogMask.minimumStep && pendingGrowth > 0;
+      const growing = !isDrawing && ++breathFrame % 2 === 0
+        && pendingGrowth >= fogMask.minimumStep && pendingGrowth > 0;
       const wetDecay = now < wetUntil ? frameMs * 0.00018 : 0;
       const regeneration = !isDrawing && estimatedFog > 0.005 ? frameMs / 16000 : 0;
       if (growing || wetDecay > 0 || regeneration > 0) {
@@ -226,6 +232,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       drawAtRef.current = () => undefined;
       wipeAtRef.current = () => undefined;
       setDrawingRef.current = () => undefined;
+      setBreathCenterRef.current = () => undefined;
       observer.disconnect();
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('webglcontextlost', onContextLost);

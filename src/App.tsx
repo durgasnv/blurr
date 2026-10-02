@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { FogCanvas } from './lib/fog';
 import type { HandTracker, HandState, CalibrationPhase } from './lib/hand';
+import type { MouthTracker } from './vision/mouthTracker';
 import { BlowDetector } from './audio/blowDetector';
 import type { GlassSurfaceHandle } from './components/GlassSurface';
 import { ExperienceOverlay, type Stage } from './components/ExperienceOverlay';
@@ -22,6 +23,7 @@ export default function App() {
   const debugHandRef       = useRef<HandState | null>(null);
   const fogRef             = useRef<FogCanvas | null>(null);
   const trackerRef         = useRef<HandTracker | null>(null);
+  const mouthRef           = useRef<MouthTracker | null>(null);
   const breathRef          = useRef<BlowDetector | null>(null);
   const streamRef          = useRef<MediaStream | null>(null);
   const startupRef         = useRef(0);
@@ -158,6 +160,9 @@ export default function App() {
       lastFrameRef.current = now;
 
       const hand = trackerRef.current?.update(now);
+      if (mouthRef.current && videoRef.current) {
+        glassRef.current?.setBreathCenter(mouthRef.current.update(videoRef.current, now));
+      }
       const interacting = !!(hand?.visible && (hand.touching || hand.wiping))
         || (hand === null && (lastPointRef.current || lastWipeRef.current) && now - lastHandAtRef.current < 250);
       glassRef.current?.setDrawing(interacting);
@@ -280,6 +285,7 @@ export default function App() {
       window.removeEventListener('resize', resize);
       streamRef.current?.getTracks().forEach(t => t.stop());
       trackerRef.current?.close();
+      mouthRef.current?.close();
       void breathRef.current?.close();
     };
   }, []);
@@ -329,6 +335,10 @@ export default function App() {
       );
       if (stale()) { tracker.close(); return; }
       trackerRef.current = tracker;
+      void import('./vision/mouthTracker').then(({ MouthTracker: Tracker }) => Tracker.create()).then(face => {
+        if (stale()) face.close();
+        else mouthRef.current = face;
+      }).catch(cause => console.warn('Mouth tracking unavailable; breath stays centered.', cause));
       // Enter calibrate stage — wait for user to show their hand
       changeStage('calibrate');
     } catch (cause) {

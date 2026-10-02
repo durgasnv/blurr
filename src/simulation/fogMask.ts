@@ -32,6 +32,8 @@ export class FogMask {
       uPrevious: { value: null },
       uGrowth: { value: 0 },
       uBlowRadius: { value: 0.15 },
+      uBlowCenter: { value: new Vector2(0.5, 0.48) },
+      uBlowSeed: { value: 0 },
       uWetDecay: { value: 0 },
       uRegeneration: { value: 0 },
       uTexel: { value: new Vector2(1, 1) },
@@ -70,10 +72,16 @@ export class FogMask {
   get texture() { return this.read.texture; }
   get minimumStep() { return this.floatTarget ? 0 : 1 / 255; }
 
+  setBlowCenter(center: GlassUv) {
+    this.material.uniforms.uBlowCenter.value.set(center.x, center.y);
+  }
+
   advance(growth: number, duration: number, wetDecay = 0, regeneration = 0) {
     if (growth <= 0 && wetDecay <= 0 && regeneration <= 0) return;
     this.material.uniforms.uGrowth.value = growth;
-    this.material.uniforms.uBlowRadius.value = Math.min(1.25, 0.13 + duration * 0.00032);
+    this.material.uniforms.uBlowRadius.value = Math.min(0.43, 0.10 + duration * 0.00012)
+      * Math.min(1, this.material.uniforms.uAspect.value);
+    if (growth > 0) this.material.uniforms.uBlowSeed.value += 1;
     this.material.uniforms.uWetDecay.value = wetDecay;
     this.material.uniforms.uRegeneration.value = regeneration;
     this.material.uniforms.uEraseStrength.value = 0;

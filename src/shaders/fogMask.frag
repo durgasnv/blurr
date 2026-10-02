@@ -1,6 +1,8 @@
 uniform sampler2D uPrevious;
 uniform float uGrowth;
 uniform float uBlowRadius;
+uniform vec2 uBlowCenter;
+uniform float uBlowSeed;
 uniform float uWetDecay;
 uniform float uRegeneration;
 uniform vec2 uTexel;
@@ -16,10 +18,19 @@ void main() {
   float fog = previous.r;
   float wet = max(0.0, previous.g - uWetDecay);
   float memory = previous.b;
-  vec2 fromCenter = (vUv - vec2(0.5, 0.48)) * vec2(uAspect, 1.0);
-  float reach = 1.0 - smoothstep(uBlowRadius * 0.38, uBlowRadius, length(fromCenter));
-  float coverage = mix(0.4, 1.3, smoothstep(0.23, 0.7, fbm(vUv * 5.3 + vec2(4.2, 8.1))));
-  fog = clamp(fog + uGrowth * reach * coverage, 0.0, 1.0);
+  if (uGrowth > 0.0) {
+    float blobs = 0.0;
+    for (int i = 0; i < 12; i++) {
+      float index = float(i);
+      vec2 random = vec2(hash21(vec2(uBlowSeed, index)), hash21(vec2(index + 19.0, uBlowSeed)));
+      vec2 offset = (random - 0.5) * vec2(1.45 / uAspect, 1.0) * uBlowRadius * 1.1;
+      vec2 delta = (vUv - uBlowCenter - offset) * vec2(uAspect / 1.45, 1.0);
+      float radius = uBlowRadius * mix(0.20, 0.48, hash21(random + index));
+      blobs += (1.0 - smoothstep(radius * 0.40, radius, length(delta))) * 0.36;
+    }
+    float coverage = mix(0.55, 1.25, fbm(vUv * 5.3 + vec2(4.2, 8.1)));
+    fog = clamp(fog + uGrowth * min(3.0, blobs) * coverage, 0.0, 1.0);
+  }
   memory = max(memory, fog);
   if (uRegeneration > 0.0) {
     float neighbors = (
