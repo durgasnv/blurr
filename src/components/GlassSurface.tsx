@@ -11,6 +11,7 @@ import {
 import vertexShader from '../shaders/glass.vert?raw';
 import fragmentShader from '../shaders/glass.frag?raw';
 import noiseShader from '../shaders/noise.glsl?raw';
+import backgroundShader from '../shaders/background.glsl?raw';
 import { FogMask } from '../simulation/fogMask';
 import { viewportToGlassUv, type GlassUv, type ViewportPoint } from '../vision/coordinateMapper';
 
@@ -53,7 +54,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     const geometry = new PlaneGeometry(2, 2);
     const material = new ShaderMaterial({
       vertexShader,
-      fragmentShader: `${noiseShader}\n${fragmentShader}`,
+      fragmentShader: `${noiseShader}\n${backgroundShader}\n${fragmentShader}`,
       uniforms: {
         uFogMask: { value: fogMask.texture },
         uTime: { value: 0 },

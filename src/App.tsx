@@ -200,7 +200,7 @@ export default function App() {
   return (
     <main className={`experience stage-${stage}`}>
       <div className="room" aria-hidden="true"><div className="room-light" /><div className="room-shape room-shape-a" /><div className="room-shape room-shape-b" /></div>
-      <video ref={videoRef} className={`mirror-video${cameraReady ? ' is-live' : ''}`} muted playsInline autoPlay aria-hidden="true" />
+      <video ref={videoRef} className={`mirror-video${cameraReady ? ' is-live' : ''}${webglReady ? ' v2-hidden' : ''}`} muted playsInline autoPlay aria-hidden="true" />
       <div className="mirror-shade" aria-hidden="true" />
       <GlassSurface ref={glassRef} debug={debug} onReady={onWebglReady} />
       <canvas ref={canvasRef} className={`fog-canvas${webglReady ? ' is-fallback-hidden' : ''}`} aria-label="Condensation on the mirror" />
