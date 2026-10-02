@@ -12,21 +12,24 @@ import vertexShader from '../shaders/glass.vert?raw';
 import fragmentShader from '../shaders/glass.frag?raw';
 import noiseShader from '../shaders/noise.glsl?raw';
 import { FogMask } from '../simulation/fogMask';
-import { viewportToGlassUv, type ViewportPoint } from '../vision/coordinateMapper';
+import { viewportToGlassUv, type GlassUv, type ViewportPoint } from '../vision/coordinateMapper';
 
 export type GlassSurfaceHandle = {
   addBreath: (strength: number, dt: number) => void;
   setFingertip: (point: ViewportPoint | null) => void;
+  drawAt: (point: ViewportPoint, at: number, connect: boolean) => void;
 };
 
 export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean }>(function GlassSurface({ debug }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const addBreathRef = useRef<(strength: number, dt: number) => void>(() => undefined);
   const setFingertipRef = useRef<(point: ViewportPoint | null) => void>(() => undefined);
+  const drawAtRef = useRef<(point: ViewportPoint, at: number, connect: boolean) => void>(() => undefined);
 
   useImperativeHandle(ref, () => ({
     addBreath: (strength, dt) => addBreathRef.current(strength, dt),
     setFingertip: point => setFingertipRef.current(point),
+    drawAt: (point, at, connect) => drawAtRef.current(point, at, connect),
   }), []);
 
   useEffect(() => {
@@ -65,6 +68,8 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean }>(f
     let pendingGrowth = 0;
     let estimatedFog = 0;
     let lastRenderAt = 0;
+    let lastDrawUv: GlassUv | null = null;
+    let lastDrawAt = 0;
     addBreathRef.current = (strength, dt) => {
       if (strength > 0.03) pendingGrowth += strength * dt * 0.00034;
     };
@@ -72,6 +77,15 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean }>(f
       const uv = point ? viewportToGlassUv(point) : { x: -1, y: -1 };
       material.uniforms.uFinger.value.set(uv.x, uv.y);
       if (debug) renderer.render(scene, camera);
+    };
+    drawAtRef.current = (point, at, connect) => {
+      const uv = viewportToGlassUv(point);
+      const from = connect && lastDrawUv && at - lastDrawAt < 95 ? lastDrawUv : uv;
+      fogMask.eraseSegment(from, uv, material.uniforms.uAspect.value);
+      material.uniforms.uFogMask.value = fogMask.texture;
+      lastDrawUv = uv;
+      lastDrawAt = at;
+      renderer.render(scene, camera);
     };
 
     renderer.setAnimationLoop(now => {
@@ -109,6 +123,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean }>(f
       renderer.setAnimationLoop(null);
       addBreathRef.current = () => undefined;
       setFingertipRef.current = () => undefined;
+      drawAtRef.current = () => undefined;
       observer.disconnect();
       window.removeEventListener('resize', resize);
       geometry.dispose();

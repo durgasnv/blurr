@@ -100,6 +100,7 @@ export default function App() {
           setGesture(nextGesture);
         }
         if (hand.drawing && fog.intensity > 0.07) {
+          glassRef.current?.drawAt(hand, now, lastPointRef.current);
           fog.addPoint(hand.x, hand.y, now, lastPointRef.current);
           lastPointRef.current = true;
           if (stageRef.current === 'raise') {

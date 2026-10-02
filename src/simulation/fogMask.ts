@@ -9,11 +9,13 @@ import {
   Scene,
   ShaderMaterial,
   UnsignedByteType,
+  Vector2,
   WebGLRenderer,
   WebGLRenderTarget,
 } from 'three';
 import vertexShader from '../shaders/glass.vert?raw';
 import fragmentShader from '../shaders/fogMask.frag?raw';
+import type { GlassUv } from '../vision/coordinateMapper';
 
 export class FogMask {
   private renderer: WebGLRenderer;
@@ -25,7 +27,15 @@ export class FogMask {
   private material = new ShaderMaterial({
     vertexShader,
     fragmentShader,
-    uniforms: { uPrevious: { value: null }, uGrowth: { value: 0 } },
+    uniforms: {
+      uPrevious: { value: null },
+      uGrowth: { value: 0 },
+      uEraseFrom: { value: new Vector2(-10, -10) },
+      uEraseTo: { value: new Vector2(-10, -10) },
+      uEraseRadius: { value: 0.026 },
+      uEraseStrength: { value: 0 },
+      uAspect: { value: 1 },
+    },
     depthWrite: false,
   });
   private floatTarget: boolean;
@@ -53,8 +63,22 @@ export class FogMask {
 
   advance(growth: number) {
     if (growth <= 0) return;
-    this.material.uniforms.uPrevious.value = this.read.texture;
     this.material.uniforms.uGrowth.value = growth;
+    this.material.uniforms.uEraseStrength.value = 0;
+    this.step();
+  }
+
+  eraseSegment(from: GlassUv, to: GlassUv, aspect: number) {
+    this.material.uniforms.uGrowth.value = 0;
+    this.material.uniforms.uEraseFrom.value.set(from.x, from.y);
+    this.material.uniforms.uEraseTo.value.set(to.x, to.y);
+    this.material.uniforms.uEraseStrength.value = 0.85;
+    this.material.uniforms.uAspect.value = aspect;
+    this.step();
+  }
+
+  private step() {
+    this.material.uniforms.uPrevious.value = this.read.texture;
     const previousTarget = this.renderer.getRenderTarget();
     this.renderer.setRenderTarget(this.write);
     this.renderer.render(this.scene, this.camera);
@@ -69,6 +93,7 @@ export class FogMask {
     const nextWrite = this.makeTarget(width, height);
     this.material.uniforms.uPrevious.value = this.read.texture;
     this.material.uniforms.uGrowth.value = 0;
+    this.material.uniforms.uEraseStrength.value = 0;
     const previousTarget = this.renderer.getRenderTarget();
     this.renderer.setRenderTarget(nextRead);
     this.renderer.render(this.scene, this.camera);
