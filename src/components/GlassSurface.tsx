@@ -149,6 +149,16 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     const observer = new ResizeObserver(resize);
     if (canvas.parentElement) observer.observe(canvas.parentElement);
     window.addEventListener('resize', resize);
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      onReady(false);
+    };
+    const onContextRestored = () => {
+      resize();
+      onReady(true);
+    };
+    canvas.addEventListener('webglcontextlost', onContextLost);
+    canvas.addEventListener('webglcontextrestored', onContextRestored);
     resize();
     onReady(true);
 
@@ -160,6 +170,8 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       drawAtRef.current = () => undefined;
       observer.disconnect();
       window.removeEventListener('resize', resize);
+      canvas.removeEventListener('webglcontextlost', onContextLost);
+      canvas.removeEventListener('webglcontextrestored', onContextRestored);
       geometry.dispose();
       material.dispose();
       fogMask.dispose();

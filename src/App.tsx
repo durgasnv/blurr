@@ -23,6 +23,7 @@ export default function App() {
   const trackerRef = useRef<HandTracker | null>(null);
   const breathRef = useRef<BlowDetector | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const startupRef = useRef(0);
   const stageRef = useRef<Stage>('intro');
   const lastPointRef = useRef(false);
   const revealAtRef = useRef(0);
@@ -192,6 +193,7 @@ export default function App() {
     };
     frame = requestAnimationFrame(tick);
     return () => {
+      startupRef.current++;
       cancelAnimationFrame(frame);
       window.removeEventListener('resize', resize);
       streamRef.current?.getTracks().forEach(track => track.stop());
@@ -206,17 +208,24 @@ export default function App() {
       changeStage('error');
       return;
     }
+    const startup = ++startupRef.current;
+    const stale = () => startup !== startupRef.current;
     changeStage('loading');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
+      if (stale()) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
       streamRef.current = stream;
       const video = videoRef.current;
       if (!video) throw new Error('Mirror closed before the camera started');
       video.srcObject = stream;
       await video.play();
+      if (stale()) return;
       setCameraReady(true);
       if (debugVideoRef.current) {
         debugVideoRef.current.srcObject = stream;
@@ -225,9 +234,16 @@ export default function App() {
       const breath = new BlowDetector(stream);
       breathRef.current = breath;
       await breath.resume();
-      trackerRef.current = await HandTracker.create(video, debug ? drawDebugLandmarks : undefined);
+      if (stale()) return;
+      const tracker = await HandTracker.create(video, debug ? drawDebugLandmarks : undefined);
+      if (stale()) {
+        tracker.close();
+        return;
+      }
+      trackerRef.current = tracker;
       changeStage('blow');
     } catch (cause) {
+      if (stale()) return;
       streamRef.current?.getTracks().forEach(track => track.stop());
       streamRef.current = null;
       if (videoRef.current) videoRef.current.srcObject = null;
