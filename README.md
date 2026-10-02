@@ -1,6 +1,6 @@
-# Blurr
+# blurr.
 
-A touchless, cinematic bathroom mirror. Your live, mirrored camera image is the reflection. Blow toward the microphone to fog the glass, then hold up only your index finger and draw in the air to wipe a path through the condensation. Open your palm or make a fist to pause. The fog returns gradually, and another blow clouds cleared drawings again.
+A small touchless glass experience. Enable the camera and microphone, blow gently to grow condensation, then raise one index finger and draw in the air. Cleared paths reveal a sharper room, collect moisture at their edges, and slowly fog over again.
 
 ## Run
 
@@ -9,23 +9,27 @@ npm install
 npm run dev
 ```
 
-Open the local address shown by Vite. Use `npm run build` for a production build. Camera and microphone access require `localhost` or HTTPS. Grant both permissions when prompted. The hand model and MediaPipe WASM runtime are fetched at startup, so the first launch needs an internet connection.
+Open the local address shown by Vite. Use `npm run build` for a production build. Media permissions require localhost or HTTPS. The MediaPipe model and WASM runtime are fetched after permission is granted, so the first launch needs an internet connection.
 
-## Controls
+## Interaction
 
-1. Select **Enable camera + microphone**. This button only starts permission requests; drawing has no pointer input.
-2. Blow steadily toward the microphone until the mirror clouds over. A short clap should not count.
-3. Hold up your index finger with the other fingers folded, then move it in front of the camera to clear the fog.
-4. Open your palm or close your fist to reposition without drawing. Blow again to fog over a drawing.
+1. Select **enable camera + mic**. This is the only required pointer or keyboard action.
+2. Blow steadily toward the microphone. Brief clicks and claps should not build significant fog.
+3. Point one index finger toward the camera and trace a shape in the air. Open your hand or close your fist to pause.
+4. Wait for the path to refog, or blow again to add more condensation.
 
-Add `?debug` to the URL to see a small camera preview with hand landmarks in addition to the fullscreen reflection. Camera and microphone data are processed locally in the browser. The MediaPipe runtime and model come from their hosted URLs.
+The camera supplies hand tracking. It is hidden behind the V2 glass in normal use. Camera and microphone data are processed on the device; neither recordings nor landmarks are uploaded. The model and runtime are downloaded from hosted URLs.
 
-## How it works
+Development mode supports `?debug` for a camera preview, hand landmarks, fingertip marker, gesture, blow readings, and FPS. The debug overlay is disabled in production builds.
 
-See [docs/architecture.md](docs/architecture.md) for the camera, gesture, breath, Canvas, timing, and performance pipeline. [docs/development-guide.md](docs/development-guide.md) keeps the requested 12-phase build and debugging guide.
+## Implementation
 
-## Limitations
+Three.js renders a fullscreen glass surface with custom GLSL shaders. A two-target GPU mask stores local fog, wet edges, and each pixel's condensation memory. Breath expands fog from the center; the tracked, smoothed fingertip clears continuous segments; the mask refills over roughly 10–20 seconds. The shader adds procedural variation, room refraction, light scattering, and a small number of moving droplets. Quality scales automatically with device capability. Canvas 2D remains as a fallback when WebGL cannot start.
 
-- Breath sensitivity varies by microphone, distance, and browser audio processing. Headsets may need a longer breath.
-- One hand is tracked at a time. Strong backlighting or an occluded fingertip can interrupt a stroke.
-- The hand model runs in the browser and may lower the effective frame rate on older phones.
+See [the V2 architecture](docs/architecture.md), [the V1 comparison](docs/v1-to-v2.md), and the original [V2 brief](planV2.md). The corrected Canvas 2D version is preserved on the `v1` branch.
+
+## Current limits
+
+- Breath sensitivity depends on microphone hardware, distance, and browser audio processing.
+- One hand is tracked at a time; occlusion and strong backlighting can interrupt a stroke.
+- WebGL and MediaPipe performance vary by device. Visual quality and the hand-to-glass feel still need a real camera and microphone check.

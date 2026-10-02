@@ -30,6 +30,6 @@ The interaction contract remains: a permission control is allowed, but drawing u
 
 ## Incremental build and review
 
-`planV2.md` contains the complete requested brief and its 15 phases. We will work through one phase at a time. For each phase, first give the task and expected visual result, let the user attempt it, then offer reference code, a test checklist, and two or three debugging challenges before moving on. Keep each independent code or documentation change in its own commit.
+`planV2.md` contains the complete requested brief and its 15 phases. V2 was implemented through separate phase commits on `main`; the user asked for direct implementation after the initial Phase 1 exercise. [The development guide](development-guide.md) now records a task, expected result, test, debugging challenges, and code reference for each phase. Each independent code or documentation change has its own commit.
 
-The first functional milestone is Phase 6: a recognizable heart drawn in the air clears a continuous path through a persistent fog mask. Later phases add gesture gating, breath driven fog growth, refraction, wet trails, droplets, regeneration, experience copy, and performance polish. Build success alone will not prove camera, microphone, gesture, or visual quality; those require browser checks on real devices.
+The first functional milestone is Phase 6: a recognizable heart drawn in the air clears a continuous path through a persistent fog mask. Later phases added gesture gating, breath driven fog growth, refraction, wet trails, droplets, regeneration, experience copy, and performance polish. Build success alone does not prove camera, microphone, gesture, or visual quality; those require browser checks on real devices.
