@@ -1,32 +1,18 @@
 import { FilesetResolver, HandLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision';
+import { classifyGesture, GestureStabilizer, type HandGesture } from '../vision/gestures';
 
-export type HandState = { x: number; y: number; drawing: boolean; visible: boolean };
+export type HandState = { x: number; y: number; drawing: boolean; visible: boolean; gesture: HandGesture };
 
 const MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm';
 const clamp = (n: number) => Math.min(1, Math.max(0, n));
-const distance = (a: NormalizedLandmark, b: NormalizedLandmark) => Math.hypot(a.x - b.x, a.y - b.y);
-
-function indexOnly(landmarks: NormalizedLandmark[]) {
-  const wrist = landmarks[0];
-  const palm = distance(wrist, landmarks[9]);
-  if (palm < 0.035) return false;
-  const extended = (tip: number, pip: number) =>
-    distance(landmarks[tip], wrist) > distance(landmarks[pip], wrist) + palm * 0.12;
-  const index = extended(8, 6);
-  const otherExtended = [extended(12, 10), extended(16, 14), extended(20, 18)];
-  return index && otherExtended.filter(Boolean).length === 0;
-}
-
 export class HandTracker {
   private landmarker: HandLandmarker;
   private video: HTMLVideoElement;
   private lastVideoTime = -1;
   private lastSeen = 0;
   private lastTime = 0;
-  private stableDraw = false;
-  private candidateDraw = false;
-  private candidateFrames = 0;
+  private gestures = new GestureStabilizer();
   private smoothX = 0;
   private smoothY = 0;
   private hadPosition = false;
@@ -65,7 +51,7 @@ export class HandTracker {
     if (this.video.currentTime === this.lastVideoTime) {
       if (now - this.lastSeen > 180) {
         this.lose();
-        return { x: this.smoothX, y: this.smoothY, drawing: false, visible: false };
+        return { x: this.smoothX, y: this.smoothY, drawing: false, visible: false, gesture: 'IDLE' };
       }
       return null;
     }
@@ -75,14 +61,12 @@ export class HandTracker {
     this.onLandmarks?.(landmarks ?? null, this.video);
     if (!landmarks) {
       if (now - this.lastSeen > 180) this.lose();
-      return { x: this.smoothX, y: this.smoothY, drawing: false, visible: false };
+      return { x: this.smoothX, y: this.smoothY, drawing: false, visible: false, gesture: 'IDLE' };
     }
     this.lastSeen = now;
 
-    const rawDraw = indexOnly(landmarks);
-    if (rawDraw === this.candidateDraw) this.candidateFrames++;
-    else { this.candidateDraw = rawDraw; this.candidateFrames = 1; }
-    if (this.candidateFrames >= (rawDraw ? 3 : 2)) this.stableDraw = rawDraw;
+    const gesture = classifyGesture(landmarks);
+    const drawing = this.gestures.update(gesture);
 
     const tip = landmarks[8];
     const bounds = this.video.parentElement?.getBoundingClientRect();
@@ -100,7 +84,7 @@ export class HandTracker {
     const inside = mappedX >= 0 && mappedX <= 1 && mappedY >= 0 && mappedY <= 1;
     if (!inside) {
       this.lose();
-      return { x: this.smoothX, y: this.smoothY, drawing: false, visible: false };
+      return { x: this.smoothX, y: this.smoothY, drawing: false, visible: false, gesture: 'IDLE' };
     }
     const x = clamp(mappedX);
     const y = clamp(mappedY);
@@ -112,12 +96,11 @@ export class HandTracker {
       this.smoothY += (y - this.smoothY) * alpha;
     }
     this.lastTime = now;
-    return { x: this.smoothX, y: this.smoothY, drawing: this.stableDraw && inside, visible: inside };
+    return { x: this.smoothX, y: this.smoothY, drawing: drawing && inside, visible: inside, gesture };
   }
 
   private lose() {
-    this.stableDraw = false;
-    this.candidateFrames = 0;
+    this.gestures.reset();
     this.hadPosition = false;
     this.lastTime = 0;
   }
