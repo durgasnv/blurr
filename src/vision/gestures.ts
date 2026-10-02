@@ -64,4 +64,10 @@ export class ProximityTracker {
     this.state           = 'HOVER';
     this.lastTime        = 0;
   }
+
+  release() {
+    this.proximity = 1;
+    this.state = 'HOVER';
+    this.lastTime = 0;
+  }
 }

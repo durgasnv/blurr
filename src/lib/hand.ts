@@ -212,9 +212,15 @@ export class HandTracker {
 
   private lose() {
     this.intentTracker.reset();
+    this.proximity.release();
     this.proximityPen = false;
     this.drawingHeld = false;
     this.releasedFrames = 0;
+    if (this.calibrationPhase !== 'done') {
+      this.calibrationPhase = 'waiting';
+      this.calibSamples = [];
+      this.calibStartAt = 0;
+    }
     this.hadPosition      = false;
     this.lastTime         = 0;
   }
