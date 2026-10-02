@@ -3,6 +3,7 @@ import gsap from 'gsap';
 import { FogCanvas } from './lib/fog';
 import { HandTracker } from './lib/hand';
 import { BreathDetector } from './lib/breath';
+import { GlassSurface } from './components/GlassSurface';
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
 
 type Stage = 'intro' | 'loading' | 'blow' | 'raise' | 'draw' | 'experience' | 'error';
@@ -190,6 +191,7 @@ export default function App() {
       <div className="room" aria-hidden="true"><div className="room-light" /><div className="room-shape room-shape-a" /><div className="room-shape room-shape-b" /></div>
       <video ref={videoRef} className={`mirror-video${cameraReady ? ' is-live' : ''}`} muted playsInline autoPlay aria-hidden="true" />
       <div className="mirror-shade" aria-hidden="true" />
+      <GlassSurface />
       <canvas ref={canvasRef} className="fog-canvas" aria-label="Condensation on the mirror" />
       <div className="glass-grain" aria-hidden="true" />
       {debug && <video ref={debugVideoRef} className="camera-preview" muted playsInline autoPlay aria-hidden="true" />}
