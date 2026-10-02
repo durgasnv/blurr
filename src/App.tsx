@@ -3,7 +3,7 @@ import gsap from 'gsap';
 import { FogCanvas } from './lib/fog';
 import { HandTracker } from './lib/hand';
 import { BreathDetector } from './lib/breath';
-import { GlassSurface } from './components/GlassSurface';
+import { GlassSurface, type GlassSurfaceHandle } from './components/GlassSurface';
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
 
 type Stage = 'intro' | 'loading' | 'blow' | 'raise' | 'draw' | 'experience' | 'error';
@@ -11,6 +11,7 @@ type Gesture = 'IDLE' | 'DRAWING';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const glassRef = useRef<GlassSurfaceHandle>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const debugVideoRef = useRef<HTMLVideoElement>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -87,6 +88,7 @@ export default function App() {
         fog.refog(breath * dt * 0.004);
       }
       else if (fog.intensity > 0) fog.setIntensity(fog.intensity - dt * 0.0000007);
+      glassRef.current?.setFogLevel(fog.intensity);
 
       if (stageRef.current === 'blow' && fog.intensity > 0.28) changeStage('raise');
       const hand = trackerRef.current?.update(now);
@@ -191,7 +193,7 @@ export default function App() {
       <div className="room" aria-hidden="true"><div className="room-light" /><div className="room-shape room-shape-a" /><div className="room-shape room-shape-b" /></div>
       <video ref={videoRef} className={`mirror-video${cameraReady ? ' is-live' : ''}`} muted playsInline autoPlay aria-hidden="true" />
       <div className="mirror-shade" aria-hidden="true" />
-      <GlassSurface />
+      <GlassSurface ref={glassRef} />
       <canvas ref={canvasRef} className="fog-canvas" aria-label="Condensation on the mirror" />
       <div className="glass-grain" aria-hidden="true" />
       {debug && <video ref={debugVideoRef} className="camera-preview" muted playsInline autoPlay aria-hidden="true" />}

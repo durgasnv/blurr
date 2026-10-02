@@ -1,15 +1,22 @@
-import { useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import {
   Mesh,
-  MeshBasicMaterial,
   OrthographicCamera,
   PlaneGeometry,
   Scene,
+  ShaderMaterial,
   WebGLRenderer,
 } from 'three';
+import vertexShader from '../shaders/glass.vert?raw';
+import fragmentShader from '../shaders/glass.frag?raw';
 
-export function GlassSurface() {
+export type GlassSurfaceHandle = { setFogLevel: (level: number) => void };
+
+export const GlassSurface = forwardRef<GlassSurfaceHandle>(function GlassSurface(_, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const setFogLevelRef = useRef<(level: number) => void>(() => undefined);
+
+  useImperativeHandle(ref, () => ({ setFogLevel: level => setFogLevelRef.current(level) }), []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -28,13 +35,22 @@ export function GlassSurface() {
     const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
     camera.position.z = 1;
     const geometry = new PlaneGeometry(2, 2);
-    const material = new MeshBasicMaterial({
-      color: 0xdce7df,
+    const material = new ShaderMaterial({
+      vertexShader,
+      fragmentShader,
+      uniforms: { uFog: { value: 0 } },
       transparent: true,
-      opacity: 0.08,
       depthWrite: false,
     });
     scene.add(new Mesh(geometry, material));
+    let lastRenderedLevel = 0;
+    setFogLevelRef.current = level => {
+      const next = Math.min(1, Math.max(0, level));
+      if (Math.abs(next - lastRenderedLevel) < 0.002) return;
+      material.uniforms.uFog.value = next;
+      lastRenderedLevel = next;
+      renderer.render(scene, camera);
+    };
 
     const resize = () => {
       const bounds = canvas.parentElement?.getBoundingClientRect();
@@ -51,6 +67,7 @@ export function GlassSurface() {
     resize();
 
     return () => {
+      setFogLevelRef.current = () => undefined;
       observer.disconnect();
       window.removeEventListener('resize', resize);
       geometry.dispose();
@@ -60,4 +77,4 @@ export function GlassSurface() {
   }, []);
 
   return <canvas ref={canvasRef} className="glass-surface" aria-hidden="true" />;
-}
+});
