@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { FogCanvas } from './lib/fog';
-import { HandTracker, type HandState } from './lib/hand';
+import type { HandTracker, HandState } from './lib/hand';
 import { BlowDetector } from './audio/blowDetector';
-import { GlassSurface, type GlassSurfaceHandle } from './components/GlassSurface';
+import type { GlassSurfaceHandle } from './components/GlassSurface';
 import { ExperienceOverlay, type Stage } from './components/ExperienceOverlay';
 import { DebugPanel, type DebugPanelHandle } from './components/DebugPanel';
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
 
 type Gesture = 'IDLE' | 'DRAWING';
+const GlassSurface = lazy(async () => ({ default: (await import('./components/GlassSurface')).GlassSurface }));
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -235,7 +236,9 @@ export default function App() {
       breathRef.current = breath;
       await breath.resume();
       if (stale()) return;
-      const tracker = await HandTracker.create(video, debug ? drawDebugLandmarks : undefined);
+      const { HandTracker: Tracker } = await import('./lib/hand');
+      if (stale()) return;
+      const tracker = await Tracker.create(video, debug ? drawDebugLandmarks : undefined);
       if (stale()) {
         tracker.close();
         return;
@@ -266,7 +269,9 @@ export default function App() {
       <div className="room" aria-hidden="true"><div className="room-light" /><div className="room-shape room-shape-a" /><div className="room-shape room-shape-b" /></div>
       <video ref={videoRef} className={`mirror-video${cameraReady ? ' is-live' : ''}${webglReady ? ' v2-hidden' : ''}`} muted playsInline autoPlay aria-hidden="true" />
       <div className="mirror-shade" aria-hidden="true" />
-      <GlassSurface ref={glassRef} debug={debug} onReady={onWebglReady} />
+      <Suspense fallback={null}>
+        <GlassSurface ref={glassRef} debug={debug} onReady={onWebglReady} />
+      </Suspense>
       <canvas ref={canvasRef} className={`fog-canvas${webglReady ? ' is-fallback-hidden' : ''}`} aria-label="Condensation on the mirror" />
       <div className="glass-grain" aria-hidden="true" />
       {debug && <video ref={debugVideoRef} className="camera-preview" muted playsInline autoPlay aria-hidden="true" />}
