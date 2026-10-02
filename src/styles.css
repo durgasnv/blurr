@@ -104,6 +104,38 @@ button { font: inherit; }
 }
 .permission-button:hover { color: #ffffff; border-color: #ffffff; }
 .permission-button:focus-visible { outline: 2px solid #f3f8f1; outline-offset: 6px; }
+.brush-control, .shutter-button {
+  position: absolute;
+  z-index: 9;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  color: #f7faf5;
+  background: rgba(231, 241, 234, 0.13);
+  border: 1px solid rgba(250, 255, 250, 0.36);
+  box-shadow: 0 5px 24px rgba(4, 13, 10, 0.14);
+  backdrop-filter: blur(14px);
+}
+.brush-control {
+  left: max(20px, env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 15px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+}
+.brush-control input { width: 108px; margin: 0; accent-color: #fff; cursor: pointer; }
+.shutter-button {
+  right: max(20px, env(safe-area-inset-right));
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.shutter-button svg { width: 22px; height: 22px; }
+.brush-control:focus-within, .shutter-button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .experience-copy small {
   display: block;
   margin-top: 22px;

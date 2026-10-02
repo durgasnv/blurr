@@ -42,6 +42,9 @@ export default function App() {
   const whisperRef         = useRef('');
   const whisperUntilRef    = useRef(0);
   const hasMistRef         = useRef(false);
+  const demoBreathRef      = useRef(false);
+  const demoSinceRef       = useRef(0);
+  const brushSizeRef       = useRef(15);
   const touchStateRef      = useRef<'HOVER' | 'TOUCHING_GLASS' | 'NO_HAND'>('NO_HAND');
 
   const [stage, setStage]             = useState<Stage>('intro');
@@ -52,6 +55,7 @@ export default function App() {
   const [webglReady, setWebglReady]   = useState(false);
   const [hasMist, setHasMist]         = useState(false);
   const [whisper, setWhisper]         = useState('');
+  const [brushSize, setBrushSize]     = useState(15);
 
   const debug = import.meta.env.DEV && new URLSearchParams(window.location.search).has('debug');
 
@@ -132,6 +136,65 @@ export default function App() {
     setStage(next);
   };
 
+  const saveFrame = () => {
+    if (webglReadyRef.current) {
+      glassRef.current?.savePng();
+      return;
+    }
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) return;
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    const width = Math.round(window.innerWidth * pixelRatio);
+    const height = Math.round(window.innerHeight * pixelRatio);
+    const output = document.createElement('canvas');
+    output.width = width;
+    output.height = height;
+    const context = output.getContext('2d');
+    if (!context) return;
+    const scale = Math.max(width / video.videoWidth, height / video.videoHeight);
+    const drawnWidth = video.videoWidth * scale;
+    const drawnHeight = video.videoHeight * scale;
+    context.translate(width, 0);
+    context.scale(-1, 1);
+    context.drawImage(video, (width - drawnWidth) / 2, (height - drawnHeight) / 2, drawnWidth, drawnHeight);
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    if (canvasRef.current) context.drawImage(canvasRef.current, 0, 0, width, height);
+    const link = document.createElement('a');
+    link.href = output.toDataURL('image/png');
+    link.download = 'blurr.png';
+    link.click();
+  };
+
+  const returnToStart = () => {
+    startupRef.current++;
+    streamRef.current?.getTracks().forEach(track => track.stop());
+    streamRef.current = null;
+    trackerRef.current?.close();
+    trackerRef.current = null;
+    mouthRef.current?.close();
+    mouthRef.current = null;
+    void breathRef.current?.close();
+    breathRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    if (debugVideoRef.current) debugVideoRef.current.srcObject = null;
+    demoBreathRef.current = false;
+    demoSinceRef.current = 0;
+    lastPointRef.current = false;
+    lastWipeRef.current = false;
+    firstDrawShownRef.current = false;
+    artistShownRef.current = false;
+    idleShownRef.current = false;
+    hasMistRef.current = false;
+    fogRef.current?.clearDrawing();
+    fogRef.current?.setIntensity(0);
+    glassRef.current?.reset();
+    setCameraReady(false);
+    setHasMist(false);
+    setShowGesture(true);
+    setWhisper('');
+    changeStage('intro');
+  };
+
   const onCalibrationPhase = useCallback((phase: CalibrationPhase) => {
     if (phase === 'done') {
       // Calibration finished — advance to blow stage if not already past it
@@ -153,6 +216,25 @@ export default function App() {
       }
     };
     window.addEventListener('resize', resize);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { returnToStart(); return; }
+      if (!streamRef.current || event.target instanceof HTMLInputElement) return;
+      if (event.code === 'Space') {
+        event.preventDefault();
+        if (!demoBreathRef.current) demoSinceRef.current = performance.now();
+        demoBreathRef.current = true;
+      } else if (!event.repeat && event.key.toLowerCase() === 'c') {
+        fogRef.current?.clearDrawing();
+        glassRef.current?.clearDrawing();
+      } else if (!event.repeat && event.key.toLowerCase() === 's') {
+        saveFrame();
+      }
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space') demoBreathRef.current = false;
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
 
     let frame = 0;
     const tick = (now: number) => {
@@ -169,17 +251,18 @@ export default function App() {
 
       // --- breath ---
       const blow    = breathRef.current?.update(now);
-      const breath  = blow?.blowStrength ?? 0;
+      const breath  = Math.max(blow?.blowStrength ?? 0, demoBreathRef.current ? 0.55 : 0);
+      const blowDuration = demoBreathRef.current ? now - demoSinceRef.current : blow?.blowDuration ?? 0;
       if (!interacting && breath > 0.03) {
         fog.setIntensity(fog.intensity + breath * dt * 0.001);
         fog.refog(breath * dt * 0.004);
         lastActivityRef.current = now;
         idleShownRef.current    = false;
         if (whisperRef.current) showWhisper('', now, 0);
-      } else if (fog.intensity > 0) {
+      } else if (!interacting && fog.intensity > 0) {
         fog.setIntensity(fog.intensity - dt * 0.0000007);
       }
-      if (!interacting) glassRef.current?.addBreath(breath, dt, blow?.blowDuration ?? 0);
+      if (!interacting) glassRef.current?.addBreath(breath, dt, blowDuration);
 
       if (fog.intensity > 0.04 && !hasMistRef.current) {
         hasMistRef.current = true;
@@ -242,8 +325,8 @@ export default function App() {
         lastPointRef.current = false;
       } else if (hand?.visible && hand.touching && fog.intensity > 0.03) {
         totalDrawMsRef.current += lastHandAtRef.current ? Math.min(100, now - lastHandAtRef.current) : 0;
-        glassRef.current?.drawAt(hand, now, lastPointRef.current);
-        fog.addPoint(hand.x, hand.y, now, lastPointRef.current);
+        glassRef.current?.drawAt(hand, now, lastPointRef.current, brushSizeRef.current);
+        fog.addPoint(hand.x, hand.y, now, lastPointRef.current, brushSizeRef.current);
         lastPointRef.current = true;
         lastWipeRef.current = false;
 
@@ -283,6 +366,8 @@ export default function App() {
       startupRef.current++;
       cancelAnimationFrame(frame);
       window.removeEventListener('resize', resize);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
       streamRef.current?.getTracks().forEach(t => t.stop());
       trackerRef.current?.close();
       mouthRef.current?.close();
@@ -398,6 +483,26 @@ export default function App() {
         whisper={whisper}
         onEnable={enable}
       />
+      {cameraReady && stage !== 'intro' && stage !== 'error' && (
+        <>
+          <label className="brush-control">
+            <span>brush</span>
+            <input type="range" min="7" max="38" value={brushSize}
+              onChange={event => {
+                const size = Number(event.currentTarget.value);
+                brushSizeRef.current = size;
+                setBrushSize(size);
+              }} aria-label="brush size" />
+          </label>
+          <button className="shutter-button" type="button" aria-label="save mirror as PNG" title="save mirror"
+            onClick={saveFrame}>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 7.5h3l1.5-2h7L17 7.5h3v11H4v-11Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+              <circle cx="12" cy="13" r="3.3" stroke="currentColor" strokeWidth="1.4" />
+            </svg>
+          </button>
+        </>
+      )}
     </main>
   );
 }
