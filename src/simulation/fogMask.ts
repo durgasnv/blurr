@@ -33,6 +33,8 @@ export class FogMask {
       uGrowth: { value: 0 },
       uBlowRadius: { value: 0.15 },
       uWetDecay: { value: 0 },
+      uRegeneration: { value: 0 },
+      uTexel: { value: new Vector2(1, 1) },
       uEraseFrom: { value: new Vector2(-10, -10) },
       uEraseTo: { value: new Vector2(-10, -10) },
       uEraseRadius: { value: 0.026 },
@@ -51,6 +53,7 @@ export class FogMask {
     this.scene.add(new Mesh(this.geometry, this.material));
     this.read = this.makeTarget(width, height);
     this.write = this.makeTarget(width, height);
+    this.material.uniforms.uTexel.value.set(1 / this.read.width, 1 / this.read.height);
 
     const oldTarget = renderer.getRenderTarget();
     const oldColor = renderer.getClearColor(new Color());
@@ -65,11 +68,12 @@ export class FogMask {
   get texture() { return this.read.texture; }
   get minimumStep() { return this.floatTarget ? 0 : 1 / 255; }
 
-  advance(growth: number, duration: number, wetDecay = 0) {
-    if (growth <= 0 && wetDecay <= 0) return;
+  advance(growth: number, duration: number, wetDecay = 0, regeneration = 0) {
+    if (growth <= 0 && wetDecay <= 0 && regeneration <= 0) return;
     this.material.uniforms.uGrowth.value = growth;
     this.material.uniforms.uBlowRadius.value = Math.min(1.25, 0.13 + duration * 0.00032);
     this.material.uniforms.uWetDecay.value = wetDecay;
+    this.material.uniforms.uRegeneration.value = regeneration;
     this.material.uniforms.uEraseStrength.value = 0;
     this.step();
   }
@@ -77,6 +81,7 @@ export class FogMask {
   eraseSegment(from: GlassUv, to: GlassUv, aspect: number, radius: number, strength: number) {
     this.material.uniforms.uGrowth.value = 0;
     this.material.uniforms.uWetDecay.value = 0;
+    this.material.uniforms.uRegeneration.value = 0;
     this.material.uniforms.uEraseFrom.value.set(from.x, from.y);
     this.material.uniforms.uEraseTo.value.set(to.x, to.y);
     this.material.uniforms.uEraseRadius.value = radius;
@@ -103,6 +108,7 @@ export class FogMask {
     this.material.uniforms.uPrevious.value = this.read.texture;
     this.material.uniforms.uGrowth.value = 0;
     this.material.uniforms.uWetDecay.value = 0;
+    this.material.uniforms.uRegeneration.value = 0;
     this.material.uniforms.uEraseStrength.value = 0;
     const previousTarget = this.renderer.getRenderTarget();
     this.renderer.setRenderTarget(nextRead);
@@ -112,6 +118,7 @@ export class FogMask {
     this.write.dispose();
     this.read = nextRead;
     this.write = nextWrite;
+    this.material.uniforms.uTexel.value.set(1 / this.read.width, 1 / this.read.height);
   }
 
   dispose() {

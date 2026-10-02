@@ -110,8 +110,9 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       lastRenderAt = now;
       const growing = pendingGrowth >= fogMask.minimumStep && pendingGrowth > 0;
       const wetDecay = now < wetUntil ? frameMs * 0.00018 : 0;
-      if (growing || wetDecay > 0) {
-        fogMask.advance(growing ? pendingGrowth : 0, latestDuration, wetDecay);
+      const regeneration = estimatedFog > 0.005 ? frameMs / 16000 : 0;
+      if (growing || wetDecay > 0 || regeneration > 0) {
+        fogMask.advance(growing ? pendingGrowth : 0, latestDuration, wetDecay, regeneration);
         if (growing) {
           estimatedFog = Math.min(1, estimatedFog + pendingGrowth);
           pendingGrowth = 0;
