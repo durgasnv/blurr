@@ -117,7 +117,7 @@ export class FogCanvas {
 
   setIntensity(value: number) {
     const next = clamp(value);
-    if (Math.abs(next - this.intensity) > 0.002) {
+    if (next !== this.intensity) {
       this.intensity = next;
       this.dirty = true;
     }
