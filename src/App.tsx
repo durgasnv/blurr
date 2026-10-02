@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import gsap from 'gsap';
 import { FogCanvas } from './lib/fog';
 import { HandTracker } from './lib/hand';
 import { BlowDetector } from './audio/blowDetector';
 import { GlassSurface, type GlassSurfaceHandle } from './components/GlassSurface';
+import { ExperienceOverlay, type Stage } from './components/ExperienceOverlay';
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
 
-type Stage = 'intro' | 'loading' | 'blow' | 'raise' | 'draw' | 'experience' | 'error';
 type Gesture = 'IDLE' | 'DRAWING';
 
 export default function App() {
@@ -15,7 +14,6 @@ export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const debugVideoRef = useRef<HTMLVideoElement>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
-  const copyRef = useRef<HTMLDivElement>(null);
   const fogRef = useRef<FogCanvas | null>(null);
   const trackerRef = useRef<HandTracker | null>(null);
   const breathRef = useRef<BlowDetector | null>(null);
@@ -26,17 +24,33 @@ export default function App() {
   const lastFrameRef = useRef(0);
   const gestureRef = useRef<Gesture>('IDLE');
   const webglReadyRef = useRef(false);
+  const firstDrawShownRef = useRef(false);
+  const artistShownRef = useRef(false);
+  const idleShownRef = useRef(false);
+  const lastActivityRef = useRef(0);
+  const lastHandAtRef = useRef(0);
+  const totalDrawMsRef = useRef(0);
+  const whisperRef = useRef('');
+  const whisperUntilRef = useRef(0);
+  const hasMistRef = useRef(false);
   const [stage, setStage] = useState<Stage>('intro');
   const [gesture, setGesture] = useState<Gesture>('IDLE');
   const [showGesture, setShowGesture] = useState(true);
   const [error, setError] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
   const [webglReady, setWebglReady] = useState(false);
+  const [hasMist, setHasMist] = useState(false);
+  const [whisper, setWhisper] = useState('');
   const debug = new URLSearchParams(window.location.search).has('debug');
   const onWebglReady = useCallback((ready: boolean) => {
     webglReadyRef.current = ready;
     setWebglReady(ready);
   }, []);
+  const showWhisper = (message: string, now: number, duration = 2400) => {
+    whisperRef.current = message;
+    whisperUntilRef.current = now + duration;
+    setWhisper(message);
+  };
 
   const drawDebugLandmarks = (landmarks: NormalizedLandmark[] | null, video: HTMLVideoElement) => {
     const canvas = debugCanvasRef.current;
@@ -93,20 +107,30 @@ export default function App() {
       if (breath > 0.03) {
         fog.setIntensity(fog.intensity + breath * dt * 0.00034);
         fog.refog(breath * dt * 0.004);
+        lastActivityRef.current = now;
+        idleShownRef.current = false;
+        if (whisperRef.current) showWhisper('', now, 0);
       }
       else if (fog.intensity > 0) fog.setIntensity(fog.intensity - dt * 0.0000007);
       glassRef.current?.addBreath(breath, dt, blow?.blowDuration ?? 0);
 
+      if (fog.intensity > 0.08 && !hasMistRef.current) {
+        hasMistRef.current = true;
+        setHasMist(true);
+      }
       if (stageRef.current === 'blow' && fog.intensity > 0.28) changeStage('raise');
       const hand = trackerRef.current?.update(now);
       if (hand) glassRef.current?.setFingertip(hand.visible ? hand : null);
       if (hand?.visible) {
+        lastActivityRef.current = now;
+        idleShownRef.current = false;
         const nextGesture: Gesture = hand.drawing ? 'DRAWING' : 'IDLE';
         if (nextGesture !== gestureRef.current) {
           gestureRef.current = nextGesture;
           setGesture(nextGesture);
         }
         if (hand.drawing && fog.intensity > 0.07) {
+          totalDrawMsRef.current += lastHandAtRef.current ? Math.min(100, now - lastHandAtRef.current) : 0;
           glassRef.current?.drawAt(hand, now, lastPointRef.current);
           fog.addPoint(hand.x, hand.y, now, lastPointRef.current);
           lastPointRef.current = true;
@@ -116,13 +140,26 @@ export default function App() {
           }
           if (stageRef.current === 'draw' && now - revealAtRef.current > 1800) changeStage('experience');
           if (now - revealAtRef.current > 5200) setShowGesture(false);
+          if (!firstDrawShownRef.current && totalDrawMsRef.current > 950) {
+            firstDrawShownRef.current = true;
+            showWhisper('cute.', now);
+          } else if (!artistShownRef.current && totalDrawMsRef.current > 20000) {
+            artistShownRef.current = true;
+            showWhisper('okay artist.', now);
+          }
         } else lastPointRef.current = false;
+        lastHandAtRef.current = now;
       } else if (hand && !hand.visible) {
         lastPointRef.current = false;
         if (gestureRef.current !== 'IDLE') {
           gestureRef.current = 'IDLE';
           setGesture('IDLE');
         }
+      }
+      if (whisperRef.current && now > whisperUntilRef.current) showWhisper('', now, 0);
+      if (stageRef.current === 'experience' && !idleShownRef.current && now - lastActivityRef.current > 45000) {
+        idleShownRef.current = true;
+        showWhisper('still there?', now, 4500);
       }
       if (!webglReadyRef.current) fog.render(now);
       frame = requestAnimationFrame(tick);
@@ -136,11 +173,6 @@ export default function App() {
       void breathRef.current?.close();
     };
   }, []);
-
-  useEffect(() => {
-    if (!copyRef.current) return;
-    gsap.fromTo(copyRef.current, { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.85, ease: 'power2.out' });
-  }, [stage]);
 
   async function enable() {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -187,16 +219,6 @@ export default function App() {
     }
   }
 
-  const content = {
-    intro: { eyebrow: 'A touchless mirror', title: <>Leave a trace<br /><em>in the mist.</em></>, detail: 'Breathe on the glass. Lift a finger. Draw in the air.' },
-    loading: { eyebrow: 'Preparing your mirror', title: <>One<br /><em>moment.</em></>, detail: 'Opening the camera, microphone, and hand tracker…' },
-    blow: { eyebrow: '01 / Breathe', title: <>Blow on<br /><em>the glass.</em></>, detail: 'A long, gentle breath will cloud the mirror.' },
-    raise: { eyebrow: '02 / Gesture', title: <>Raise your<br /><em>finger.</em></>, detail: 'Point one index finger toward the camera.' },
-    draw: { eyebrow: '03 / Create', title: <>Draw.</>, detail: 'Move your finger through the air.' },
-    experience: { eyebrow: '', title: <></>, detail: '' },
-    error: { eyebrow: 'Access needed', title: <>Let’s try<br /><em>again.</em></>, detail: error },
-  }[stage];
-
   return (
     <main className={`experience stage-${stage}`}>
       <div className="room" aria-hidden="true"><div className="room-light" /><div className="room-shape room-shape-a" /><div className="room-shape room-shape-b" /></div>
@@ -208,31 +230,7 @@ export default function App() {
       {debug && <video ref={debugVideoRef} className="camera-preview" muted playsInline autoPlay aria-hidden="true" />}
       {debug && <canvas ref={debugCanvasRef} className="landmark-preview" width="190" height="143" aria-hidden="true" />}
 
-      <header className="topbar">
-        <div className="brand">BLURR<span className="brand-dot">.</span></div>
-        <div className="topbar-center">AN INTERACTIVE MIRROR</div>
-        {(stage === 'intro' || stage === 'error') && <button className="topbar-start" onClick={enable} aria-label="Enable camera and microphone">ENABLE ↗</button>}
-        <div className="live-mark"><span /> {stage === 'intro' || stage === 'error' ? 'WAITING' : stage === 'loading' ? 'CONNECTING' : 'LIVE'}</div>
-      </header>
-
-      {stage !== 'experience' && <section className="hero" ref={copyRef} key={stage}>
-        <div className="eyebrow"><span className="eyebrow-rule" />{content.eyebrow}</div>
-        <h1>{content.title}</h1>
-        <p>{content.detail}</p>
-        {(stage === 'intro' || stage === 'error') && <button className="enable-button" onClick={enable}>
-          <span>ENABLE CAMERA + MICROPHONE</span><span className="button-arrow">↗</span>
-        </button>}
-        {stage === 'loading' && <div className="loading-line" aria-label="Loading" />}
-      </section>}
-
-      {stage !== 'intro' && stage !== 'loading' && stage !== 'error' && showGesture &&
-        <div className="gesture-indicator"><span className={gesture === 'DRAWING' ? 'gesture-light on' : 'gesture-light'} />{gesture}</div>}
-
-      <footer className="footer">
-        <span>YOUR BREATH IS THE BRUSH</span>
-        <div className="footer-center"><span>01</span><i /><span>02</span><i /><span>03</span></div>
-        <span>OPEN PALM OR FIST TO PAUSE</span>
-      </footer>
+      <ExperienceOverlay stage={stage} hasMist={hasMist} error={error} gesture={gesture} showGesture={showGesture} whisper={whisper} onEnable={enable} />
     </main>
   );
 }
