@@ -9,6 +9,7 @@ import {
 } from 'three';
 import vertexShader from '../shaders/glass.vert?raw';
 import fragmentShader from '../shaders/glass.frag?raw';
+import noiseShader from '../shaders/noise.glsl?raw';
 
 export type GlassSurfaceHandle = { setFogLevel: (level: number) => void };
 
@@ -37,13 +38,14 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle>(function GlassSurface
     const geometry = new PlaneGeometry(2, 2);
     const material = new ShaderMaterial({
       vertexShader,
-      fragmentShader,
-      uniforms: { uFog: { value: 0 } },
+      fragmentShader: `${noiseShader}\n${fragmentShader}`,
+      uniforms: { uFog: { value: 0 }, uTime: { value: 0 } },
       transparent: true,
       depthWrite: false,
     });
     scene.add(new Mesh(geometry, material));
     let lastRenderedLevel = 0;
+    let lastRenderAt = 0;
     setFogLevelRef.current = level => {
       const next = Math.min(1, Math.max(0, level));
       if (Math.abs(next - lastRenderedLevel) < 0.002) return;
@@ -51,6 +53,13 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle>(function GlassSurface
       lastRenderedLevel = next;
       renderer.render(scene, camera);
     };
+
+    renderer.setAnimationLoop(now => {
+      if (document.hidden || material.uniforms.uFog.value < 0.005 || now - lastRenderAt < 32) return;
+      lastRenderAt = now;
+      material.uniforms.uTime.value = now * 0.001;
+      renderer.render(scene, camera);
+    });
 
     const resize = () => {
       const bounds = canvas.parentElement?.getBoundingClientRect();
@@ -67,6 +76,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle>(function GlassSurface
     resize();
 
     return () => {
+      renderer.setAnimationLoop(null);
       setFogLevelRef.current = () => undefined;
       observer.disconnect();
       window.removeEventListener('resize', resize);
