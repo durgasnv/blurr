@@ -10,14 +10,15 @@ import {
 import vertexShader from '../shaders/glass.vert?raw';
 import fragmentShader from '../shaders/glass.frag?raw';
 import noiseShader from '../shaders/noise.glsl?raw';
+import { FogMask } from '../simulation/fogMask';
 
-export type GlassSurfaceHandle = { setFogLevel: (level: number) => void };
+export type GlassSurfaceHandle = { addBreath: (strength: number, dt: number) => void };
 
 export const GlassSurface = forwardRef<GlassSurfaceHandle>(function GlassSurface(_, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const setFogLevelRef = useRef<(level: number) => void>(() => undefined);
+  const addBreathRef = useRef<(strength: number, dt: number) => void>(() => undefined);
 
-  useImperativeHandle(ref, () => ({ setFogLevel: level => setFogLevelRef.current(level) }), []);
+  useImperativeHandle(ref, () => ({ addBreath: (strength, dt) => addBreathRef.current(strength, dt) }), []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -32,6 +33,8 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle>(function GlassSurface
     }
 
     renderer.setClearColor(0x000000, 0);
+    const bounds = canvas.parentElement?.getBoundingClientRect();
+    const fogMask = new FogMask(renderer, bounds?.width ?? window.innerWidth, bounds?.height ?? window.innerHeight);
     const scene = new Scene();
     const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
     camera.position.z = 1;
@@ -39,24 +42,28 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle>(function GlassSurface
     const material = new ShaderMaterial({
       vertexShader,
       fragmentShader: `${noiseShader}\n${fragmentShader}`,
-      uniforms: { uFog: { value: 0 }, uTime: { value: 0 } },
+      uniforms: { uFogMask: { value: fogMask.texture }, uTime: { value: 0 } },
       transparent: true,
       depthWrite: false,
     });
     scene.add(new Mesh(geometry, material));
-    let lastRenderedLevel = 0;
+    let pendingGrowth = 0;
+    let estimatedFog = 0;
     let lastRenderAt = 0;
-    setFogLevelRef.current = level => {
-      const next = Math.min(1, Math.max(0, level));
-      if (Math.abs(next - lastRenderedLevel) < 0.002) return;
-      material.uniforms.uFog.value = next;
-      lastRenderedLevel = next;
-      renderer.render(scene, camera);
+    addBreathRef.current = (strength, dt) => {
+      if (strength > 0.03) pendingGrowth += strength * dt * 0.00034;
     };
 
     renderer.setAnimationLoop(now => {
-      if (document.hidden || material.uniforms.uFog.value < 0.005 || now - lastRenderAt < 32) return;
+      if (document.hidden || now - lastRenderAt < 32) return;
       lastRenderAt = now;
+      if (pendingGrowth >= fogMask.minimumStep && pendingGrowth > 0) {
+        fogMask.advance(pendingGrowth);
+        estimatedFog = Math.min(1, estimatedFog + pendingGrowth);
+        pendingGrowth = 0;
+        material.uniforms.uFogMask.value = fogMask.texture;
+      }
+      if (estimatedFog < 0.005) return;
       material.uniforms.uTime.value = now * 0.001;
       renderer.render(scene, camera);
     });
@@ -67,6 +74,8 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle>(function GlassSurface
       const height = Math.max(1, Math.round(bounds?.height ?? window.innerHeight));
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
       renderer.setSize(width, height, false);
+      fogMask.resize(width, height);
+      material.uniforms.uFogMask.value = fogMask.texture;
       renderer.render(scene, camera);
     };
 
@@ -77,11 +86,12 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle>(function GlassSurface
 
     return () => {
       renderer.setAnimationLoop(null);
-      setFogLevelRef.current = () => undefined;
+      addBreathRef.current = () => undefined;
       observer.disconnect();
       window.removeEventListener('resize', resize);
       geometry.dispose();
       material.dispose();
+      fogMask.dispose();
       renderer.dispose();
     };
   }, []);

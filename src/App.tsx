@@ -88,7 +88,7 @@ export default function App() {
         fog.refog(breath * dt * 0.004);
       }
       else if (fog.intensity > 0) fog.setIntensity(fog.intensity - dt * 0.0000007);
-      glassRef.current?.setFogLevel(fog.intensity);
+      glassRef.current?.addBreath(breath, dt);
 
       if (stageRef.current === 'blow' && fog.intensity > 0.28) changeStage('raise');
       const hand = trackerRef.current?.update(now);
