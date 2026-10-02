@@ -60,12 +60,12 @@ export class BlowDetector {
     }
     const flatness = Math.exp(logSum / bins) / (total / bins + 0.001);
     const highRatio = high / (total + 0.001);
-    const likelyBreath = rms > Math.max(0.006, this.noiseFloor * 1.8)
-      && flatness > 0.28 && highRatio > 0.32;
+    const likelyBreath = rms > Math.max(0.004, this.noiseFloor * 1.5)
+      && flatness > 0.18 && highRatio > 0.22;
 
     if (!likelyBreath) this.noiseFloor += (Math.min(rms, 0.07) - this.noiseFloor) * 0.012;
     this.candidateMs = likelyBreath ? this.candidateMs + dt : Math.max(0, this.candidateMs - dt * 2);
-    const isBlowing = this.candidateMs >= 280;
+    const isBlowing = this.candidateMs >= 160;
     const target = isBlowing ? Math.min(1, (rms - this.noiseFloor) * 12 + 0.22) : 0;
     const sample = this.sample;
     sample.volume = rms;
