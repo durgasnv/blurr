@@ -8,19 +8,19 @@ The Three.js glass and MediaPipe tracker are loaded as separate JavaScript chunk
 
 ## Vision and gesture path
 
-`src/lib/hand.ts` runs inference only when the camera supplies a new video frame. It reads landmark 8, maps the tip through the visible `object-fit: cover` crop, mirrors it, and smooths its position with a time-based exponential filter. `src/vision/coordinateMapper.ts` then converts normalized top-left viewport coordinates into bottom-left WebGL UV coordinates.
+`src/lib/hand.ts` runs inference only when the camera supplies a new video frame. It reads landmark 8, maps the tip through the visible `object-fit: cover` crop, mirrors it, and smooths its position in two stages. A brief tracking gap under 250 ms keeps the stroke alive. `src/vision/coordinateMapper.ts` then converts normalized top-left viewport coordinates into bottom-left WebGL UV coordinates.
 
-`src/vision/gestures.ts` classifies index-only pointing, open palm, fist, and other poses. Three positive frames enter drawing mode; two negative frames leave it. Losing the hand for 180 ms resets smoothing and gesture state. There are no pointer, touch, stylus, or keyboard drawing listeners.
+`src/vision/gestures.ts` retains calibrated hand proximity. `src/vision/handIntent.ts` adds size-relative pinch hysteresis and a four-finger fist check. Drawing can begin through proximity or pinch; a fist makes a broad wipe. A pen release needs two consecutive frames. Wipe stamps are spaced by distance, capped at 40 per frame, and never bridge a tracking jump over 30% of the screen width. There are no pointer, touch, stylus, or keyboard drawing listeners.
 
 ## Audio path
 
-`src/audio/blowDetector.ts` reuses waveform and FFT arrays. It measures RMS volume, spectral flatness, and energy above 1.8 kHz against an adaptive idle noise floor. Breath evidence has to persist for about 280 ms. The reusable sample reports volume, smoothed blow strength, blowing state, duration, and diagnostic measures. These thresholds are heuristics and may need tuning for a particular microphone.
+`src/audio/blowDetector.ts` reuses waveform and FFT arrays. It measures RMS volume, spectral flatness, and energy above 1.8 kHz against an asymmetrically adapting room noise floor. Breath evidence has to persist for about 160 ms, and keyboard activity suppresses detection for 300 ms. The reusable sample reports volume, smoothed blow strength, blowing state, duration, and diagnostic measures. These thresholds are heuristics and may need tuning for a particular microphone.
 
 ## GPU condensation state
 
 `src/simulation/fogMask.ts` owns two `WebGLRenderTarget` textures. Each simulation pass reads one target and writes the other, then swaps them. Red stores current fog, green stores temporary wetness around cleared strokes, and blue stores the highest local condensation as a regeneration target. Resize copies the mask into new targets using normalized UVs.
 
-The mask shader in `src/shaders/fogMask.frag` grows mist from the center as sustained breaths continue. It uses procedural variation so growth is uneven. A drawing segment subtracts fog along the path and deposits moisture in a ring. Consecutive fingertip positions are joined only across short tracking gaps; hand speed subtly changes stroke width and strength. Regeneration moves cleared pixels back toward their stored target over roughly 10–20 seconds while slightly softening edges.
+`src/vision/mouthTracker.ts` checks the face every fifth new video frame and eases a mouth position toward its latest detection. If it cannot load, growth stays centered. The mask shader in `src/shaders/fogMask.frag` grows twelve soft, horizontally spread blobs around that point every other render frame. A drawing segment subtracts fog along the path and deposits moisture in a ring. Consecutive fingertip positions are joined only across short tracking gaps; hand speed subtly changes stroke width and strength. Regeneration moves cleared pixels back toward their stored target over roughly 10–20 seconds while slightly softening edges, and pauses during interaction.
 
 ## Glass and water
 
@@ -32,4 +32,4 @@ The mask shader in `src/shaders/fogMask.frag` grows mist from the center as sust
 
 ## Interface
 
-`src/components/ExperienceOverlay.tsx` shows a minimal permission screen and short onboarding phrases. GSAP fades between phrases. A gesture label appears briefly, then disappears. Rare drawing and idle messages are driven by activity in `App.tsx`. `src/components/DebugPanel.tsx` is available only in development mode.
+`src/components/ExperienceOverlay.tsx` shows a minimal permission screen and short onboarding phrases. GSAP fades between phrases. A gesture label appears briefly, then disappears. Rare drawing and idle messages are driven by activity in `App.tsx`. Optional brush and shutter controls appear after permission; Space, C, S, and Esc are optional shortcuts. `src/components/DebugPanel.tsx` is available only in development mode.
