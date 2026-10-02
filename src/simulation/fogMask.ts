@@ -32,6 +32,7 @@ export class FogMask {
       uPrevious: { value: null },
       uGrowth: { value: 0 },
       uBlowRadius: { value: 0.15 },
+      uWetDecay: { value: 0 },
       uEraseFrom: { value: new Vector2(-10, -10) },
       uEraseTo: { value: new Vector2(-10, -10) },
       uEraseRadius: { value: 0.026 },
@@ -64,19 +65,22 @@ export class FogMask {
   get texture() { return this.read.texture; }
   get minimumStep() { return this.floatTarget ? 0 : 1 / 255; }
 
-  advance(growth: number, duration: number) {
-    if (growth <= 0) return;
+  advance(growth: number, duration: number, wetDecay = 0) {
+    if (growth <= 0 && wetDecay <= 0) return;
     this.material.uniforms.uGrowth.value = growth;
     this.material.uniforms.uBlowRadius.value = Math.min(1.25, 0.13 + duration * 0.00032);
+    this.material.uniforms.uWetDecay.value = wetDecay;
     this.material.uniforms.uEraseStrength.value = 0;
     this.step();
   }
 
-  eraseSegment(from: GlassUv, to: GlassUv, aspect: number) {
+  eraseSegment(from: GlassUv, to: GlassUv, aspect: number, radius: number, strength: number) {
     this.material.uniforms.uGrowth.value = 0;
+    this.material.uniforms.uWetDecay.value = 0;
     this.material.uniforms.uEraseFrom.value.set(from.x, from.y);
     this.material.uniforms.uEraseTo.value.set(to.x, to.y);
-    this.material.uniforms.uEraseStrength.value = 0.85;
+    this.material.uniforms.uEraseRadius.value = radius;
+    this.material.uniforms.uEraseStrength.value = strength;
     this.material.uniforms.uAspect.value = aspect;
     this.step();
   }
@@ -98,6 +102,7 @@ export class FogMask {
     const nextWrite = this.makeTarget(width, height);
     this.material.uniforms.uPrevious.value = this.read.texture;
     this.material.uniforms.uGrowth.value = 0;
+    this.material.uniforms.uWetDecay.value = 0;
     this.material.uniforms.uEraseStrength.value = 0;
     const previousTarget = this.renderer.getRenderTarget();
     this.renderer.setRenderTarget(nextRead);

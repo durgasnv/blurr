@@ -70,6 +70,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     let latestDuration = 0;
     let estimatedFog = 0;
     let lastRenderAt = 0;
+    let wetUntil = 0;
     let lastDrawUv: GlassUv | null = null;
     let lastDrawAt = 0;
     addBreathRef.current = (strength, dt, duration) => {
@@ -86,20 +87,30 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     drawAtRef.current = (point, at, connect) => {
       const uv = viewportToGlassUv(point);
       const from = connect && lastDrawUv && at - lastDrawAt < 95 ? lastDrawUv : uv;
-      fogMask.eraseSegment(from, uv, material.uniforms.uAspect.value);
+      const elapsed = Math.max(16, at - lastDrawAt) / 1000;
+      const speed = Math.hypot((uv.x - from.x) * material.uniforms.uAspect.value, uv.y - from.y) / elapsed;
+      const radius = 0.028 - Math.min(0.009, speed * 0.0025);
+      const strength = 0.95 - Math.min(0.18, speed * 0.05);
+      fogMask.eraseSegment(from, uv, material.uniforms.uAspect.value, radius, strength);
       material.uniforms.uFogMask.value = fogMask.texture;
       lastDrawUv = uv;
       lastDrawAt = at;
+      wetUntil = at + 6000;
       renderer.render(scene, camera);
     };
 
     renderer.setAnimationLoop(now => {
       if (document.hidden || now - lastRenderAt < 32) return;
+      const frameMs = lastRenderAt ? Math.min(100, now - lastRenderAt) : 32;
       lastRenderAt = now;
-      if (pendingGrowth >= fogMask.minimumStep && pendingGrowth > 0) {
-        fogMask.advance(pendingGrowth, latestDuration);
-        estimatedFog = Math.min(1, estimatedFog + pendingGrowth);
-        pendingGrowth = 0;
+      const growing = pendingGrowth >= fogMask.minimumStep && pendingGrowth > 0;
+      const wetDecay = now < wetUntil ? frameMs * 0.00018 : 0;
+      if (growing || wetDecay > 0) {
+        fogMask.advance(growing ? pendingGrowth : 0, latestDuration, wetDecay);
+        if (growing) {
+          estimatedFog = Math.min(1, estimatedFog + pendingGrowth);
+          pendingGrowth = 0;
+        }
         material.uniforms.uFogMask.value = fogMask.texture;
       }
       if (estimatedFog < 0.005) return;
