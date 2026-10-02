@@ -14,6 +14,8 @@ export class BlowDetector {
   private waveform: Float32Array<ArrayBuffer>;
   private spectrum: Uint8Array<ArrayBuffer>;
   private noiseFloor = 0.008;
+  private quietUntil = 0;
+  private onKeydown = () => { this.quietUntil = performance.now() + 300; };
   private candidateMs = 0;
   private lastAt = 0;
   private sample: BlowSample = {
@@ -32,6 +34,7 @@ export class BlowDetector {
     this.analyser.fftSize = 2048;
     this.analyser.smoothingTimeConstant = 0.5;
     this.source.connect(this.analyser);
+    window.addEventListener('keydown', this.onKeydown);
     this.waveform = new Float32Array(this.analyser.fftSize);
     this.spectrum = new Uint8Array(this.analyser.frequencyBinCount);
   }
@@ -60,13 +63,13 @@ export class BlowDetector {
     }
     const flatness = Math.exp(logSum / bins) / (total / bins + 0.001);
     const highRatio = high / (total + 0.001);
-    const likelyBreath = rms > Math.max(0.004, this.noiseFloor * 1.5)
+    const likelyBreath = now >= this.quietUntil && rms > this.noiseFloor + 0.0025
       && flatness > 0.18 && highRatio > 0.22;
 
-    if (!likelyBreath) this.noiseFloor += (Math.min(rms, 0.07) - this.noiseFloor) * 0.012;
+    this.noiseFloor += (Math.min(rms, 0.07) - this.noiseFloor) * (rms < this.noiseFloor ? 0.05 : 0.0008);
     this.candidateMs = likelyBreath ? this.candidateMs + dt : Math.max(0, this.candidateMs - dt * 2);
     const isBlowing = this.candidateMs >= 160;
-    const target = isBlowing ? Math.min(1, (rms - this.noiseFloor) * 12 + 0.22) : 0;
+    const target = isBlowing ? Math.min(1, Math.max(0.15, (rms - this.noiseFloor - 0.0025) / 0.008)) : 0;
     const sample = this.sample;
     sample.volume = rms;
     sample.flatness = flatness;
@@ -78,6 +81,7 @@ export class BlowDetector {
   }
 
   async close() {
+    window.removeEventListener('keydown', this.onKeydown);
     this.source.disconnect();
     await this.context.close();
   }
