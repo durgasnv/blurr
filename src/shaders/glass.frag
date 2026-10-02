@@ -1,4 +1,7 @@
 uniform sampler2D uFogMask;
+uniform sampler2D uCamera;
+uniform float uHasCamera;
+uniform vec2 uVideoCrop;
 uniform float uTime;
 uniform vec2 uFinger;
 uniform float uDebugFinger;
@@ -7,6 +10,13 @@ uniform vec3 uDrops[12];
 uniform int uDropCount;
 uniform float uQuality;
 varying vec2 vUv;
+
+vec3 sampleBackground(vec2 uv) {
+  if (uHasCamera < 0.5) return atmosphericRoom(uv);
+  vec2 mirrored = vec2(1.0 - uv.x, uv.y);
+  vec2 cameraUv = (mirrored - 0.5) * uVideoCrop + 0.5;
+  return texture2D(uCamera, clamp(cameraUv, 0.0, 1.0)).rgb;
+}
 
 void main() {
   vec2 drift = vec2(uTime * 0.012, -uTime * 0.007);
@@ -49,13 +59,13 @@ void main() {
     dropRim += edge * dropVisibility;
   }
   vec2 displaced = clamp(vUv + (maskSlope * 0.012 + surfaceSlope * 0.025) * fog + wetSlope * wet * 0.018 + dropNormal, 0.0, 1.0);
-  vec3 sharp = atmosphericRoom(displaced);
+  vec3 sharp = sampleBackground(displaced);
   vec2 blurOffset = vec2(0.012 / uAspect, 0.012) * fog;
   vec3 diffused = sharp;
   if (uQuality > 1.5) {
-    diffused = (atmosphericRoom(displaced + blurOffset) + atmosphericRoom(displaced - blurOffset)) * 0.5;
+    diffused = (sampleBackground(displaced + blurOffset) + sampleBackground(displaced - blurOffset)) * 0.5;
   } else if (uQuality > 0.5) {
-    diffused = atmosphericRoom(displaced + blurOffset);
+    diffused = sampleBackground(displaced + blurOffset);
   }
   vec3 color = mix(sharp, diffused, fog * 0.7);
   color = mix(color, vec3(0.59, 0.68, 0.63), fog * 0.42);

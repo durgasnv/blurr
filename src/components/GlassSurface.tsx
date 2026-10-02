@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, type RefObject } from 'react';
 import {
   Mesh,
   OrthographicCamera,
@@ -6,6 +6,7 @@ import {
   Scene,
   ShaderMaterial,
   Vector2,
+  VideoTexture,
   WebGLRenderer,
 } from 'three';
 import vertexShader from '../shaders/glass.vert?raw';
@@ -23,7 +24,7 @@ export type GlassSurfaceHandle = {
   drawAt: (point: ViewportPoint, at: number, connect: boolean) => void;
 };
 
-export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onReady: (ready: boolean) => void }>(function GlassSurface({ debug, onReady }, ref) {
+export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onReady: (ready: boolean) => void; video: RefObject<HTMLVideoElement | null> }>(function GlassSurface({ debug, onReady, video }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const addBreathRef = useRef<(strength: number, dt: number, duration: number) => void>(() => undefined);
   const setFingertipRef = useRef<(point: ViewportPoint | null) => void>(() => undefined);
@@ -61,11 +62,15 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
     camera.position.z = 1;
     const geometry = new PlaneGeometry(2, 2);
+    const cameraTexture = video.current ? new VideoTexture(video.current) : null;
     const material = new ShaderMaterial({
       vertexShader,
       fragmentShader: `${noiseShader}\n${backgroundShader}\n${fragmentShader}`,
       uniforms: {
         uFogMask: { value: fogMask.texture },
+        uCamera: { value: cameraTexture },
+        uHasCamera: { value: 0 },
+        uVideoCrop: { value: new Vector2(1, 1) },
         uTime: { value: 0 },
         uFinger: { value: new Vector2(-1, -1) },
         uDebugFinger: { value: debug ? 1 : 0 },
@@ -85,6 +90,19 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     let wetUntil = 0;
     let lastDrawUv: GlassUv | null = null;
     let lastDrawAt = 0;
+    let videoWidth = 0;
+    let videoHeight = 0;
+    let viewportWidth = 1;
+    let viewportHeight = 1;
+    const updateVideoCrop = () => {
+      if (!videoWidth || !videoHeight) return;
+      const videoAspect = videoWidth / videoHeight;
+      const viewportAspect = viewportWidth / viewportHeight;
+      material.uniforms.uVideoCrop.value.set(
+        Math.min(1, viewportAspect / videoAspect),
+        Math.min(1, videoAspect / viewportAspect),
+      );
+    };
     addBreathRef.current = (strength, dt, duration) => {
       if (strength > 0.03 && duration > 0) {
         pendingGrowth += strength * dt * 0.00034;
@@ -116,6 +134,14 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       if (document.hidden || now - lastRenderAt < quality.frameInterval) return;
       const frameMs = lastRenderAt ? Math.min(100, now - lastRenderAt) : quality.frameInterval;
       lastRenderAt = now;
+      const cameraVideo = video.current;
+      const hasCamera = !!cameraTexture && !!cameraVideo && cameraVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && cameraVideo.videoWidth > 0;
+      if (hasCamera && cameraVideo && (cameraVideo.videoWidth !== videoWidth || cameraVideo.videoHeight !== videoHeight)) {
+        videoWidth = cameraVideo.videoWidth;
+        videoHeight = cameraVideo.videoHeight;
+        updateVideoCrop();
+      }
+      material.uniforms.uHasCamera.value = hasCamera ? 1 : 0;
       const growing = pendingGrowth >= fogMask.minimumStep && pendingGrowth > 0;
       const wetDecay = now < wetUntil ? frameMs * 0.00018 : 0;
       const regeneration = estimatedFog > 0.005 ? frameMs / 16000 : 0;
@@ -127,7 +153,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
         }
         material.uniforms.uFogMask.value = fogMask.texture;
       }
-      if (estimatedFog < 0.005) return;
+      if (estimatedFog < 0.005 && !hasCamera) return;
       droplets.update(frameMs / 1000, estimatedFog);
       material.uniforms.uDropCount.value = droplets.count;
       material.uniforms.uTime.value = now * 0.001;
@@ -138,6 +164,9 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       const bounds = canvas.parentElement?.getBoundingClientRect();
       const width = Math.max(1, Math.round(bounds?.width ?? window.innerWidth));
       const height = Math.max(1, Math.round(bounds?.height ?? window.innerHeight));
+      viewportWidth = width;
+      viewportHeight = height;
+      updateVideoCrop();
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelRatio));
       renderer.setSize(width, height, false);
       material.uniforms.uAspect.value = width / height;
@@ -174,10 +203,11 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       canvas.removeEventListener('webglcontextrestored', onContextRestored);
       geometry.dispose();
       material.dispose();
+      cameraTexture?.dispose();
       fogMask.dispose();
       renderer.dispose();
     };
-  }, [debug, onReady]);
+  }, [debug, onReady, video]);
 
   return <canvas ref={canvasRef} className={debug ? 'glass-surface debug-glass' : 'glass-surface'} aria-hidden="true" />;
 });

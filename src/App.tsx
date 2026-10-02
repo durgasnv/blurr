@@ -270,7 +270,7 @@ export default function App() {
       <video ref={videoRef} className={`mirror-video${cameraReady ? ' is-live' : ''}${webglReady ? ' v2-hidden' : ''}`} muted playsInline autoPlay aria-hidden="true" />
       <div className="mirror-shade" aria-hidden="true" />
       <Suspense fallback={null}>
-        <GlassSurface ref={glassRef} debug={debug} onReady={onWebglReady} />
+        <GlassSurface ref={glassRef} debug={debug} onReady={onWebglReady} video={videoRef} />
       </Suspense>
       <canvas ref={canvasRef} className={`fog-canvas${webglReady ? ' is-fallback-hidden' : ''}`} aria-label="Condensation on the mirror" />
       <div className="glass-grain" aria-hidden="true" />
