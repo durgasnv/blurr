@@ -5,20 +5,29 @@ import {
   PlaneGeometry,
   Scene,
   ShaderMaterial,
+  Vector2,
   WebGLRenderer,
 } from 'three';
 import vertexShader from '../shaders/glass.vert?raw';
 import fragmentShader from '../shaders/glass.frag?raw';
 import noiseShader from '../shaders/noise.glsl?raw';
 import { FogMask } from '../simulation/fogMask';
+import { viewportToGlassUv, type ViewportPoint } from '../vision/coordinateMapper';
 
-export type GlassSurfaceHandle = { addBreath: (strength: number, dt: number) => void };
+export type GlassSurfaceHandle = {
+  addBreath: (strength: number, dt: number) => void;
+  setFingertip: (point: ViewportPoint | null) => void;
+};
 
-export const GlassSurface = forwardRef<GlassSurfaceHandle>(function GlassSurface(_, ref) {
+export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean }>(function GlassSurface({ debug }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const addBreathRef = useRef<(strength: number, dt: number) => void>(() => undefined);
+  const setFingertipRef = useRef<(point: ViewportPoint | null) => void>(() => undefined);
 
-  useImperativeHandle(ref, () => ({ addBreath: (strength, dt) => addBreathRef.current(strength, dt) }), []);
+  useImperativeHandle(ref, () => ({
+    addBreath: (strength, dt) => addBreathRef.current(strength, dt),
+    setFingertip: point => setFingertipRef.current(point),
+  }), []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -42,7 +51,13 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle>(function GlassSurface
     const material = new ShaderMaterial({
       vertexShader,
       fragmentShader: `${noiseShader}\n${fragmentShader}`,
-      uniforms: { uFogMask: { value: fogMask.texture }, uTime: { value: 0 } },
+      uniforms: {
+        uFogMask: { value: fogMask.texture },
+        uTime: { value: 0 },
+        uFinger: { value: new Vector2(-1, -1) },
+        uDebugFinger: { value: debug ? 1 : 0 },
+        uAspect: { value: 1 },
+      },
       transparent: true,
       depthWrite: false,
     });
@@ -52,6 +67,11 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle>(function GlassSurface
     let lastRenderAt = 0;
     addBreathRef.current = (strength, dt) => {
       if (strength > 0.03) pendingGrowth += strength * dt * 0.00034;
+    };
+    setFingertipRef.current = point => {
+      const uv = point ? viewportToGlassUv(point) : { x: -1, y: -1 };
+      material.uniforms.uFinger.value.set(uv.x, uv.y);
+      if (debug) renderer.render(scene, camera);
     };
 
     renderer.setAnimationLoop(now => {
@@ -74,6 +94,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle>(function GlassSurface
       const height = Math.max(1, Math.round(bounds?.height ?? window.innerHeight));
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
       renderer.setSize(width, height, false);
+      material.uniforms.uAspect.value = width / height;
       fogMask.resize(width, height);
       material.uniforms.uFogMask.value = fogMask.texture;
       renderer.render(scene, camera);
@@ -87,6 +108,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle>(function GlassSurface
     return () => {
       renderer.setAnimationLoop(null);
       addBreathRef.current = () => undefined;
+      setFingertipRef.current = () => undefined;
       observer.disconnect();
       window.removeEventListener('resize', resize);
       geometry.dispose();
@@ -94,7 +116,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle>(function GlassSurface
       fogMask.dispose();
       renderer.dispose();
     };
-  }, []);
+  }, [debug]);
 
-  return <canvas ref={canvasRef} className="glass-surface" aria-hidden="true" />;
+  return <canvas ref={canvasRef} className={debug ? 'glass-surface debug-glass' : 'glass-surface'} aria-hidden="true" />;
 });

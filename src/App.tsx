@@ -92,6 +92,7 @@ export default function App() {
 
       if (stageRef.current === 'blow' && fog.intensity > 0.28) changeStage('raise');
       const hand = trackerRef.current?.update(now);
+      if (hand) glassRef.current?.setFingertip(hand.visible ? hand : null);
       if (hand?.visible) {
         const nextGesture: Gesture = hand.drawing ? 'DRAWING' : 'IDLE';
         if (nextGesture !== gestureRef.current) {
@@ -193,7 +194,7 @@ export default function App() {
       <div className="room" aria-hidden="true"><div className="room-light" /><div className="room-shape room-shape-a" /><div className="room-shape room-shape-b" /></div>
       <video ref={videoRef} className={`mirror-video${cameraReady ? ' is-live' : ''}`} muted playsInline autoPlay aria-hidden="true" />
       <div className="mirror-shade" aria-hidden="true" />
-      <GlassSurface ref={glassRef} />
+      <GlassSurface ref={glassRef} debug={debug} />
       <canvas ref={canvasRef} className="fog-canvas" aria-label="Condensation on the mirror" />
       <div className="glass-grain" aria-hidden="true" />
       {debug && <video ref={debugVideoRef} className="camera-preview" muted playsInline autoPlay aria-hidden="true" />}
