@@ -18,8 +18,8 @@ void main() {
   float memory = previous.b;
   vec2 fromCenter = (vUv - vec2(0.5, 0.48)) * vec2(uAspect, 1.0);
   float reach = 1.0 - smoothstep(uBlowRadius * 0.38, uBlowRadius, length(fromCenter));
-  float patch = mix(0.4, 1.3, smoothstep(0.23, 0.7, fbm(vUv * 5.3 + vec2(4.2, 8.1))));
-  fog = clamp(fog + uGrowth * reach * patch, 0.0, 1.0);
+  float coverage = mix(0.4, 1.3, smoothstep(0.23, 0.7, fbm(vUv * 5.3 + vec2(4.2, 8.1))));
+  fog = clamp(fog + uGrowth * reach * coverage, 0.0, 1.0);
   memory = max(memory, fog);
   if (uRegeneration > 0.0) {
     float neighbors = (

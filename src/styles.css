@@ -149,6 +149,14 @@ button { font: inherit; }
 }
 
 .glass-surface.debug-glass { z-index: 8; }
+.debug-cursor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 11;
+  pointer-events: none;
+}
 .camera-preview, .landmark-preview {
   position: absolute;
   right: 20px;

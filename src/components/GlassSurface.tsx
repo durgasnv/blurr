@@ -20,7 +20,7 @@ import { chooseQuality } from '../utils/performance';
 
 export type GlassSurfaceHandle = {
   addBreath: (strength: number, dt: number, duration: number) => void;
-  setFingertip: (point: ViewportPoint | null) => void;
+  setFingertip: (point: ViewportPoint | null, touching?: boolean) => void;
   drawAt: (point: ViewportPoint, at: number, connect: boolean) => void;
 };
 

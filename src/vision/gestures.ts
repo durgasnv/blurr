@@ -1,41 +1,67 @@
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
 
-export type HandGesture = 'DRAW' | 'OPEN_PALM' | 'FIST' | 'IDLE';
+export type HandGesture = 'HOVER' | 'TOUCHING_GLASS' | 'NO_HAND';
 
-const distance = (a: NormalizedLandmark, b: NormalizedLandmark) => Math.hypot(a.x - b.x, a.y - b.y);
-
-export function classifyGesture(landmarks: NormalizedLandmark[]): HandGesture {
-  const wrist = landmarks[0];
-  const palm = distance(wrist, landmarks[9]);
-  if (palm < 0.035) return 'IDLE';
-  const extended = (tip: number, pip: number) =>
-    distance(landmarks[tip], wrist) > distance(landmarks[pip], wrist) + palm * 0.12;
-  const fingers = [extended(8, 6), extended(12, 10), extended(16, 14), extended(20, 18)];
-  if (fingers[0] && fingers.slice(1).every(value => !value)) return 'DRAW';
-  if (fingers.every(Boolean)) return 'OPEN_PALM';
-  if (fingers.every(value => !value)) return 'FIST';
-  return 'IDLE';
+// ---------------------------------------------------------------------------
+// Hand scale — apparent size of the hand in normalised image space.
+// We use the distance between the index-finger MCP (landmark 5) and the
+// pinky MCP (landmark 17) as a stable, rotation-tolerant proxy for how
+// close the hand is to the camera.
+// ---------------------------------------------------------------------------
+export function measureHandScale(landmarks: NormalizedLandmark[]): number {
+  const indexMcp = landmarks[5];
+  const pinkyMcp = landmarks[17];
+  return Math.hypot(indexMcp.x - pinkyMcp.x, indexMcp.y - pinkyMcp.y);
 }
 
-export class GestureStabilizer {
-  private candidateDraw = false;
-  private candidateFrames = 0;
-  private stableDraw = false;
+// ---------------------------------------------------------------------------
+// ProximityTracker
+//
+// Maintains:
+//   calibratedScale  — resting hand size measured during calibration
+//   proximity        — smoothed ratio of currentScale / calibratedScale
+//   state            — HOVER | TOUCHING_GLASS  (with hysteresis)
+//
+// Hysteresis thresholds (relative to calibrated scale):
+//   TOUCH_ENTER  1.28  — must reach this to enter TOUCHING_GLASS
+//   TOUCH_EXIT   1.16  — must fall below this to leave TOUCHING_GLASS
+// ---------------------------------------------------------------------------
+const TOUCH_ENTER = 1.28;
+const TOUCH_EXIT  = 1.16;
+const SMOOTH_TAU  = 60;   // ms  — EMA time constant for proximity
 
-  update(gesture: HandGesture) {
-    const drawing = gesture === 'DRAW';
-    if (drawing === this.candidateDraw) this.candidateFrames++;
-    else {
-      this.candidateDraw = drawing;
-      this.candidateFrames = 1;
+export class ProximityTracker {
+  calibratedScale = 0;
+  proximity       = 1;
+  state: 'HOVER' | 'TOUCHING_GLASS' = 'HOVER';
+  private lastTime = 0;
+
+  calibrate(scale: number) {
+    this.calibratedScale = scale;
+    this.proximity = 1;
+    this.state = 'HOVER';
+  }
+
+  update(scale: number, now: number): 'HOVER' | 'TOUCHING_GLASS' {
+    if (!this.calibratedScale) return 'HOVER';
+    const dt    = this.lastTime ? Math.min(100, now - this.lastTime) : 16;
+    this.lastTime = now;
+    const alpha   = 1 - Math.exp(-dt / SMOOTH_TAU);
+    const raw     = scale / this.calibratedScale;
+    this.proximity += (raw - this.proximity) * alpha;
+
+    if (this.state === 'HOVER' && this.proximity >= TOUCH_ENTER) {
+      this.state = 'TOUCHING_GLASS';
+    } else if (this.state === 'TOUCHING_GLASS' && this.proximity < TOUCH_EXIT) {
+      this.state = 'HOVER';
     }
-    if (this.candidateFrames >= (drawing ? 3 : 2)) this.stableDraw = drawing;
-    return this.stableDraw;
+    return this.state;
   }
 
   reset() {
-    this.candidateDraw = false;
-    this.candidateFrames = 0;
-    this.stableDraw = false;
+    this.calibratedScale = 0;
+    this.proximity       = 1;
+    this.state           = 'HOVER';
+    this.lastTime        = 0;
   }
 }

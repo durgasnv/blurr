@@ -1,26 +1,28 @@
 import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
 
-export type Stage = 'intro' | 'loading' | 'blow' | 'raise' | 'draw' | 'experience' | 'error';
+export type Stage = 'intro' | 'loading' | 'blow' | 'calibrate' | 'raise' | 'draw' | 'experience' | 'error';
 
 type Props = {
-  stage: Stage;
-  hasMist: boolean;
-  error: string;
-  gesture: 'IDLE' | 'DRAWING';
+  stage:       Stage;
+  hasMist:     boolean;
+  error:       string;
+  touchState:  'HOVER' | 'TOUCHING_GLASS' | 'NO_HAND';
   showGesture: boolean;
-  whisper: string;
-  onEnable: () => void;
+  whisper:     string;
+  onEnable:    () => void;
 };
 
-export function ExperienceOverlay({ stage, hasMist, error, gesture, showGesture, whisper, onEnable }: Props) {
+export function ExperienceOverlay({ stage, hasMist, error, touchState, showGesture, whisper, onEnable }: Props) {
   const copyRef = useRef<HTMLDivElement>(null);
+
   const phrases: Partial<Record<Stage, string>> = {
-    loading: 'hush.',
-    blow: hasMist ? 'again...' : 'blow gently.',
-    raise: 'raise your finger.',
-    draw: 'draw me something.',
-    error: 'try again.',
+    loading:   'hush.',
+    calibrate: 'show me your hand.',
+    blow:      hasMist ? 'again...' : 'blow gently.',
+    raise:     'come closer.',
+    draw:      'draw me something.',
+    error:     'try again.',
   };
   const phrase = phrases[stage];
 
@@ -54,8 +56,10 @@ export function ExperienceOverlay({ stage, hasMist, error, gesture, showGesture,
       )}
       {(stage === 'draw' || stage === 'experience') && whisper && <div className="experience-whisper" aria-live="polite">{whisper}</div>}
       {stage === 'experience' && <span className="quiet-brand" aria-hidden="true">blurr.</span>}
-      {stage !== 'intro' && stage !== 'loading' && stage !== 'error' && showGesture && (
-        <div className="gesture-indicator" aria-live="polite">{gesture === 'DRAWING' ? 'draw' : 'idle'}</div>
+      {stage !== 'intro' && stage !== 'loading' && stage !== 'calibrate' && stage !== 'error' && showGesture && (
+        <div className="gesture-indicator" aria-live="polite">
+          {touchState === 'TOUCHING_GLASS' ? 'touching' : 'hover'}
+        </div>
       )}
     </>
   );

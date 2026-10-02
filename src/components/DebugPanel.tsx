@@ -1,15 +1,17 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react';
-import type { HandGesture } from '../vision/gestures';
 
 export type DebugSnapshot = {
-  fps: number;
-  volume: number;
+  fps:          number;
+  volume:       number;
   blowStrength: number;
   blowDuration: number;
-  isBlowing: boolean;
-  gesture: HandGesture | 'NO HAND';
-  fingerX: number | null;
-  fingerY: number | null;
+  isBlowing:    boolean;
+  handDetected: boolean;
+  handScale:    number;
+  proximity:    number;
+  touchState:   'HOVER' | 'TOUCHING_GLASS' | 'NO_HAND';
+  fingerX:      number | null;
+  fingerY:      number | null;
 };
 
 export type DebugPanelHandle = { update: (snapshot: DebugSnapshot) => void };
@@ -17,18 +19,22 @@ export type DebugPanelHandle = { update: (snapshot: DebugSnapshot) => void };
 export const DebugPanel = forwardRef<DebugPanelHandle>(function DebugPanel(_, ref) {
   const textRef = useRef<HTMLPreElement>(null);
   useImperativeHandle(ref, () => ({
-    update(snapshot) {
+    update(s) {
       if (!textRef.current) return;
-      const finger = snapshot.fingerX === null || snapshot.fingerY === null
+      const finger = s.fingerX === null || s.fingerY === null
         ? '—'
-        : `${snapshot.fingerX.toFixed(2)}, ${snapshot.fingerY.toFixed(2)}`;
+        : `${s.fingerX.toFixed(2)}, ${s.fingerY.toFixed(2)}`;
       textRef.current.textContent = [
-        `fps            ${snapshot.fps.toFixed(0)}`,
-        `volume         ${snapshot.volume.toFixed(3)}`,
-        `blow strength  ${snapshot.blowStrength.toFixed(2)}`,
-        `blowing        ${snapshot.isBlowing ? 'yes' : 'no'}`,
-        `duration       ${snapshot.blowDuration.toFixed(0)} ms`,
-        `gesture        ${snapshot.gesture.toLowerCase()}`,
+        `fps            ${s.fps.toFixed(0)}`,
+        `volume         ${s.volume.toFixed(3)}`,
+        `blow strength  ${s.blowStrength.toFixed(2)}`,
+        `blowing        ${s.isBlowing ? 'yes' : 'no'}`,
+        `duration       ${s.blowDuration.toFixed(0)} ms`,
+        `─────────────────────────`,
+        `hand detected  ${s.handDetected ? 'YES' : 'NO'}`,
+        `hand scale     ${s.handScale.toFixed(3)}`,
+        `proximity      ${s.proximity.toFixed(2)}`,
+        `state          ${s.touchState}`,
         `finger         ${finger}`,
       ].join('\n');
     },
