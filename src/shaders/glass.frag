@@ -5,12 +5,13 @@ uniform float uDebugFinger;
 uniform float uAspect;
 uniform vec3 uDrops[12];
 uniform int uDropCount;
+uniform float uQuality;
 varying vec2 vUv;
 
 void main() {
   vec2 drift = vec2(uTime * 0.012, -uTime * 0.007);
-  float cloud = fbm(vUv * 3.8 + drift);
-  float finer = valueNoise(vUv * 32.0 - drift * 2.0);
+  float cloud = uQuality < 0.5 ? valueNoise(vUv * 3.8 + drift) : fbm(vUv * 3.8 + drift);
+  float finer = uQuality < 0.5 ? 0.5 : valueNoise(vUv * 32.0 - drift * 2.0);
   float grain = hash21(vUv * 1200.0);
   float density = clamp(cloud * 0.78 + finer * 0.18 + grain * 0.04, 0.0, 1.0);
   vec4 moisture = texture2D(uFogMask, vUv);
@@ -22,10 +23,13 @@ void main() {
     texture2D(uFogMask, vUv + vec2(texel.x, 0.0)).r - texture2D(uFogMask, vUv - vec2(texel.x, 0.0)).r,
     texture2D(uFogMask, vUv + vec2(0.0, texel.y)).r - texture2D(uFogMask, vUv - vec2(0.0, texel.y)).r
   );
-  vec2 surfaceSlope = vec2(
-    valueNoise(vUv * 34.0 + vec2(0.03, 0.0)) - valueNoise(vUv * 34.0 - vec2(0.03, 0.0)),
-    valueNoise(vUv * 34.0 + vec2(0.0, 0.03)) - valueNoise(vUv * 34.0 - vec2(0.0, 0.03))
-  );
+  vec2 surfaceSlope = vec2(0.0);
+  if (uQuality > 0.5) {
+    surfaceSlope = vec2(
+      valueNoise(vUv * 34.0 + vec2(0.03, 0.0)) - valueNoise(vUv * 34.0 - vec2(0.03, 0.0)),
+      valueNoise(vUv * 34.0 + vec2(0.0, 0.03)) - valueNoise(vUv * 34.0 - vec2(0.0, 0.03))
+    );
+  }
   vec2 wetSlope = vec2(
     texture2D(uFogMask, vUv + vec2(texel.x, 0.0)).g - texture2D(uFogMask, vUv - vec2(texel.x, 0.0)).g,
     texture2D(uFogMask, vUv + vec2(0.0, texel.y)).g - texture2D(uFogMask, vUv - vec2(0.0, texel.y)).g
@@ -47,7 +51,12 @@ void main() {
   vec2 displaced = clamp(vUv + (maskSlope * 0.012 + surfaceSlope * 0.025) * fog + wetSlope * wet * 0.018 + dropNormal, 0.0, 1.0);
   vec3 sharp = atmosphericRoom(displaced);
   vec2 blurOffset = vec2(0.012 / uAspect, 0.012) * fog;
-  vec3 diffused = (atmosphericRoom(displaced + blurOffset) + atmosphericRoom(displaced - blurOffset)) * 0.5;
+  vec3 diffused = sharp;
+  if (uQuality > 1.5) {
+    diffused = (atmosphericRoom(displaced + blurOffset) + atmosphericRoom(displaced - blurOffset)) * 0.5;
+  } else if (uQuality > 0.5) {
+    diffused = atmosphericRoom(displaced + blurOffset);
+  }
   vec3 color = mix(sharp, diffused, fog * 0.7);
   color = mix(color, vec3(0.59, 0.68, 0.63), fog * 0.42);
   color = mix(color, color * 0.70 + vec3(0.035, 0.064, 0.048), wet * 0.5);

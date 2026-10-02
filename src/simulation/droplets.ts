@@ -7,13 +7,18 @@ export class DropletSimulation {
   readonly positions = Array.from({ length: MAX_DROPS }, () => new Vector3(-10, -10, 0));
   private velocity = new Float32Array(MAX_DROPS);
   private spawnClock = 0;
+  private maxActive: number;
   count = 0;
+
+  constructor(maxActive = MAX_DROPS) {
+    this.maxActive = Math.min(MAX_DROPS, maxActive);
+  }
 
   update(seconds: number, fogAmount: number) {
     const dt = Math.min(seconds, 0.1);
     if (fogAmount > 0.12) {
       this.spawnClock += dt * (0.25 + fogAmount * 1.3);
-      if (this.spawnClock >= 1 && this.count < MAX_DROPS) {
+      if (this.spawnClock >= 1 && this.count < this.maxActive) {
         this.spawnClock -= 1;
         this.spawn();
       }

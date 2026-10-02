@@ -15,6 +15,7 @@ import backgroundShader from '../shaders/background.glsl?raw';
 import { FogMask } from '../simulation/fogMask';
 import { DropletSimulation } from '../simulation/droplets';
 import { viewportToGlassUv, type GlassUv, type ViewportPoint } from '../vision/coordinateMapper';
+import { chooseQuality } from '../utils/performance';
 
 export type GlassSurfaceHandle = {
   addBreath: (strength: number, dt: number, duration: number) => void;
@@ -48,8 +49,14 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
 
     renderer.setClearColor(0x000000, 0);
     const bounds = canvas.parentElement?.getBoundingClientRect();
-    const fogMask = new FogMask(renderer, bounds?.width ?? window.innerWidth, bounds?.height ?? window.innerHeight);
-    const droplets = new DropletSimulation();
+    const quality = chooseQuality(
+      bounds?.width ?? window.innerWidth,
+      bounds?.height ?? window.innerHeight,
+      window.devicePixelRatio || 1,
+      navigator.hardwareConcurrency || 8,
+    );
+    const fogMask = new FogMask(renderer, bounds?.width ?? window.innerWidth, bounds?.height ?? window.innerHeight, quality.maskScale);
+    const droplets = new DropletSimulation(quality.maxDrops);
     const scene = new Scene();
     const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
     camera.position.z = 1;
@@ -65,6 +72,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
         uAspect: { value: 1 },
         uDrops: { value: droplets.positions },
         uDropCount: { value: 0 },
+        uQuality: { value: quality.shaderLevel },
       },
       transparent: true,
       depthWrite: false,
@@ -105,8 +113,8 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     };
 
     renderer.setAnimationLoop(now => {
-      if (document.hidden || now - lastRenderAt < 32) return;
-      const frameMs = lastRenderAt ? Math.min(100, now - lastRenderAt) : 32;
+      if (document.hidden || now - lastRenderAt < quality.frameInterval) return;
+      const frameMs = lastRenderAt ? Math.min(100, now - lastRenderAt) : quality.frameInterval;
       lastRenderAt = now;
       const growing = pendingGrowth >= fogMask.minimumStep && pendingGrowth > 0;
       const wetDecay = now < wetUntil ? frameMs * 0.00018 : 0;
@@ -130,7 +138,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       const bounds = canvas.parentElement?.getBoundingClientRect();
       const width = Math.max(1, Math.round(bounds?.width ?? window.innerWidth));
       const height = Math.max(1, Math.round(bounds?.height ?? window.innerHeight));
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelRatio));
       renderer.setSize(width, height, false);
       material.uniforms.uAspect.value = width / height;
       fogMask.resize(width, height);

@@ -44,9 +44,11 @@ export class FogMask {
     depthWrite: false,
   });
   private floatTarget: boolean;
+  private scale: number;
 
-  constructor(renderer: WebGLRenderer, width: number, height: number) {
+  constructor(renderer: WebGLRenderer, width: number, height: number, scale = 0.5) {
     this.renderer = renderer;
+    this.scale = scale;
     this.floatTarget = renderer.extensions.has('EXT_color_buffer_float');
     this.camera.position.z = 1;
     this.material.uniforms.uAspect.value = width / Math.max(1, height);
@@ -101,8 +103,8 @@ export class FogMask {
 
   resize(width: number, height: number) {
     this.material.uniforms.uAspect.value = width / Math.max(1, height);
-    if (this.read.width === Math.max(1, Math.round(width * 0.5))
-      && this.read.height === Math.max(1, Math.round(height * 0.5))) return;
+    if (this.read.width === Math.max(1, Math.round(width * this.scale))
+      && this.read.height === Math.max(1, Math.round(height * this.scale))) return;
     const nextRead = this.makeTarget(width, height);
     const nextWrite = this.makeTarget(width, height);
     this.material.uniforms.uPrevious.value = this.read.texture;
@@ -130,8 +132,8 @@ export class FogMask {
 
   private makeTarget(width: number, height: number) {
     return new WebGLRenderTarget(
-      Math.max(1, Math.round(width * 0.5)),
-      Math.max(1, Math.round(height * 0.5)),
+      Math.max(1, Math.round(width * this.scale)),
+      Math.max(1, Math.round(height * this.scale)),
       {
         format: RGBAFormat,
         type: this.floatTarget ? HalfFloatType : UnsignedByteType,
