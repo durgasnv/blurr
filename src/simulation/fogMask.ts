@@ -15,6 +15,7 @@ import {
 } from 'three';
 import vertexShader from '../shaders/glass.vert?raw';
 import fragmentShader from '../shaders/fogMask.frag?raw';
+import noiseShader from '../shaders/noise.glsl?raw';
 import type { GlassUv } from '../vision/coordinateMapper';
 
 export class FogMask {
@@ -26,10 +27,11 @@ export class FogMask {
   private geometry = new PlaneGeometry(2, 2);
   private material = new ShaderMaterial({
     vertexShader,
-    fragmentShader,
+    fragmentShader: `${noiseShader}\n${fragmentShader}`,
     uniforms: {
       uPrevious: { value: null },
       uGrowth: { value: 0 },
+      uBlowRadius: { value: 0.15 },
       uEraseFrom: { value: new Vector2(-10, -10) },
       uEraseTo: { value: new Vector2(-10, -10) },
       uEraseRadius: { value: 0.026 },
@@ -44,6 +46,7 @@ export class FogMask {
     this.renderer = renderer;
     this.floatTarget = renderer.extensions.has('EXT_color_buffer_float');
     this.camera.position.z = 1;
+    this.material.uniforms.uAspect.value = width / Math.max(1, height);
     this.scene.add(new Mesh(this.geometry, this.material));
     this.read = this.makeTarget(width, height);
     this.write = this.makeTarget(width, height);
@@ -61,9 +64,10 @@ export class FogMask {
   get texture() { return this.read.texture; }
   get minimumStep() { return this.floatTarget ? 0 : 1 / 255; }
 
-  advance(growth: number) {
+  advance(growth: number, duration: number) {
     if (growth <= 0) return;
     this.material.uniforms.uGrowth.value = growth;
+    this.material.uniforms.uBlowRadius.value = Math.min(1.25, 0.13 + duration * 0.00032);
     this.material.uniforms.uEraseStrength.value = 0;
     this.step();
   }
@@ -87,6 +91,7 @@ export class FogMask {
   }
 
   resize(width: number, height: number) {
+    this.material.uniforms.uAspect.value = width / Math.max(1, height);
     if (this.read.width === Math.max(1, Math.round(width * 0.5))
       && this.read.height === Math.max(1, Math.round(height * 0.5))) return;
     const nextRead = this.makeTarget(width, height);

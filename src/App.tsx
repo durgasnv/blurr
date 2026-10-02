@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { FogCanvas } from './lib/fog';
 import { HandTracker } from './lib/hand';
@@ -25,12 +25,18 @@ export default function App() {
   const revealAtRef = useRef(0);
   const lastFrameRef = useRef(0);
   const gestureRef = useRef<Gesture>('IDLE');
+  const webglReadyRef = useRef(false);
   const [stage, setStage] = useState<Stage>('intro');
   const [gesture, setGesture] = useState<Gesture>('IDLE');
   const [showGesture, setShowGesture] = useState(true);
   const [error, setError] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
+  const [webglReady, setWebglReady] = useState(false);
   const debug = new URLSearchParams(window.location.search).has('debug');
+  const onWebglReady = useCallback((ready: boolean) => {
+    webglReadyRef.current = ready;
+    setWebglReady(ready);
+  }, []);
 
   const drawDebugLandmarks = (landmarks: NormalizedLandmark[] | null, video: HTMLVideoElement) => {
     const canvas = debugCanvasRef.current;
@@ -82,13 +88,14 @@ export default function App() {
     const tick = (now: number) => {
       const dt = lastFrameRef.current ? Math.min(60, now - lastFrameRef.current) : 16;
       lastFrameRef.current = now;
-      const breath = breathRef.current?.update(now).blowStrength ?? 0;
+      const blow = breathRef.current?.update(now);
+      const breath = blow?.blowStrength ?? 0;
       if (breath > 0.03) {
         fog.setIntensity(fog.intensity + breath * dt * 0.00034);
         fog.refog(breath * dt * 0.004);
       }
       else if (fog.intensity > 0) fog.setIntensity(fog.intensity - dt * 0.0000007);
-      glassRef.current?.addBreath(breath, dt);
+      glassRef.current?.addBreath(breath, dt, blow?.blowDuration ?? 0);
 
       if (stageRef.current === 'blow' && fog.intensity > 0.28) changeStage('raise');
       const hand = trackerRef.current?.update(now);
@@ -117,7 +124,7 @@ export default function App() {
           setGesture('IDLE');
         }
       }
-      fog.render(now);
+      if (!webglReadyRef.current) fog.render(now);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -195,8 +202,8 @@ export default function App() {
       <div className="room" aria-hidden="true"><div className="room-light" /><div className="room-shape room-shape-a" /><div className="room-shape room-shape-b" /></div>
       <video ref={videoRef} className={`mirror-video${cameraReady ? ' is-live' : ''}`} muted playsInline autoPlay aria-hidden="true" />
       <div className="mirror-shade" aria-hidden="true" />
-      <GlassSurface ref={glassRef} debug={debug} />
-      <canvas ref={canvasRef} className="fog-canvas" aria-label="Condensation on the mirror" />
+      <GlassSurface ref={glassRef} debug={debug} onReady={onWebglReady} />
+      <canvas ref={canvasRef} className={`fog-canvas${webglReady ? ' is-fallback-hidden' : ''}`} aria-label="Condensation on the mirror" />
       <div className="glass-grain" aria-hidden="true" />
       {debug && <video ref={debugVideoRef} className="camera-preview" muted playsInline autoPlay aria-hidden="true" />}
       {debug && <canvas ref={debugCanvasRef} className="landmark-preview" width="190" height="143" aria-hidden="true" />}

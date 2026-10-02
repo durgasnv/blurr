@@ -1,5 +1,6 @@
 uniform sampler2D uPrevious;
 uniform float uGrowth;
+uniform float uBlowRadius;
 uniform vec2 uEraseFrom;
 uniform vec2 uEraseTo;
 uniform float uEraseRadius;
@@ -9,7 +10,10 @@ varying vec2 vUv;
 
 void main() {
   float fog = texture2D(uPrevious, vUv).r;
-  fog = clamp(fog + uGrowth, 0.0, 1.0);
+  vec2 fromCenter = (vUv - vec2(0.5, 0.48)) * vec2(uAspect, 1.0);
+  float reach = 1.0 - smoothstep(uBlowRadius * 0.38, uBlowRadius, length(fromCenter));
+  float patch = mix(0.4, 1.3, smoothstep(0.23, 0.7, fbm(vUv * 5.3 + vec2(4.2, 8.1))));
+  fog = clamp(fog + uGrowth * reach * patch, 0.0, 1.0);
   vec2 point = vUv * vec2(uAspect, 1.0);
   vec2 start = uEraseFrom * vec2(uAspect, 1.0);
   vec2 end = uEraseTo * vec2(uAspect, 1.0);
