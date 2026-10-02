@@ -15,6 +15,10 @@ export function isFist(landmarks: NormalizedLandmark[]): boolean {
   );
 }
 
+export function isIndexExtended(landmarks: NormalizedLandmark[]): boolean {
+  return distance(landmarks[8], landmarks[0]) > distance(landmarks[6], landmarks[0]);
+}
+
 export class HandIntentTracker {
   private drawing = false;
   private releaseFrames = 0;
@@ -31,7 +35,7 @@ export class HandIntentTracker {
     this.fistFrames = 0;
 
     const wrist = landmarks[0];
-    const indexExtended = distance(landmarks[8], wrist) > distance(landmarks[6], wrist);
+    const indexExtended = isIndexExtended(landmarks);
     const handLength = Math.max(0.001, distance(wrist, landmarks[9]));
     const pinch = distance(landmarks[4], landmarks[8]) / handLength;
 

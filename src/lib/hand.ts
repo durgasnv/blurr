@@ -1,5 +1,6 @@
 import { FilesetResolver, HandLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision';
 import { measureHandScale, ProximityTracker, type HandGesture } from '../vision/gestures';
+import { handWidth, HandIntentTracker, isIndexExtended, type HandIntent } from '../vision/handIntent';
 
 export type { HandGesture };
 
@@ -11,6 +12,9 @@ export type HandState = {
   handScale:  number;    // current raw apparent hand size
   proximity:  number;    // smoothed ratio vs calibrated size
   state:      'HOVER' | 'TOUCHING_GLASS';
+  intent:     HandIntent;
+  wiping:     boolean;
+  wipeRadius: number;   // screen-height UV units
 };
 
 // ---------------------------------------------------------------------------
@@ -34,6 +38,10 @@ export class HandTracker {
   private lastSeen      = 0;
   private lastTime      = 0;
   private proximity     = new ProximityTracker();
+  private intentTracker  = new HandIntentTracker();
+  private proximityPen   = false;
+  private rawX           = 0;
+  private rawY           = 0;
   private smoothX       = 0;
   private smoothY       = 0;
   private hadPosition   = false;
@@ -85,9 +93,9 @@ export class HandTracker {
   update(now: number): HandState | null {
     if (this.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || this.video.videoWidth === 0) return null;
     if (this.video.currentTime === this.lastVideoTime) {
-      if (now - this.lastSeen > 180) {
+      if (now - this.lastSeen > 250) {
         this.lose();
-        return { x: this.smoothX, y: this.smoothY, touching: false, visible: false, handScale: 0, proximity: this.proximity.proximity, state: 'HOVER' };
+        return this.missingState();
       }
       return null;
     }
@@ -98,8 +106,11 @@ export class HandTracker {
     this.onLandmarks?.(landmarks ?? null, this.video);
 
     if (!landmarks) {
-      if (now - this.lastSeen > 180) this.lose();
-      return { x: this.smoothX, y: this.smoothY, touching: false, visible: false, handScale: 0, proximity: this.proximity.proximity, state: 'HOVER' };
+      if (now - this.lastSeen > 250) {
+        this.lose();
+        return this.missingState();
+      }
+      return null;
     }
     this.lastSeen = now;
 
@@ -142,38 +153,55 @@ export class HandTracker {
 
     if (!inside) {
       this.lose();
-      return { x: this.smoothX, y: this.smoothY, touching: false, visible: false, handScale, proximity: this.proximity.proximity, state: 'HOVER' };
+      return this.missingState();
     }
 
     const x  = clamp(mappedX);
     const y  = clamp(mappedY);
     const dt = this.lastTime ? Math.min(50, now - this.lastTime) : 16;
-    const alpha = 1 - Math.exp(-dt / 42);
+    const rawAlpha = 1 - Math.pow(0.55, dt / 16.7);
+    const brushAlpha = 1 - Math.pow(0.78, dt / 16.7);
     if (!this.hadPosition) {
+      this.rawX = x;
+      this.rawY = y;
       this.smoothX = x;
       this.smoothY = y;
       this.hadPosition = true;
     } else {
-      this.smoothX += (x - this.smoothX) * alpha;
-      this.smoothY += (y - this.smoothY) * alpha;
+      this.rawX += (x - this.rawX) * rawAlpha;
+      this.rawY += (y - this.rawY) * rawAlpha;
+      this.smoothX += (this.rawX - this.smoothX) * brushAlpha;
+      this.smoothY += (this.rawY - this.smoothY) * brushAlpha;
     }
     this.lastTime = now;
+    const intent = this.intentTracker.update(landmarks);
+    if (intent === 'WIPE' || touchState === 'HOVER') this.proximityPen = false;
+    else if (!this.proximityPen && isIndexExtended(landmarks)) this.proximityPen = true;
+    const wipeRadius = handWidth(landmarks) * displayedWidth / height * 1.6;
 
     return {
       x:         this.smoothX,
       y:         this.smoothY,
-      touching:  touchState === 'TOUCHING_GLASS' && inside,
+      touching:  intent === 'DRAW' || this.proximityPen,
       visible:   inside,
       handScale,
       proximity: this.proximity.proximity,
       state:     touchState,
+      intent,
+      wiping:   intent === 'WIPE',
+      wipeRadius,
     };
   }
 
+  private missingState(): HandState {
+    return { x: this.smoothX, y: this.smoothY, touching: false, visible: false,
+      handScale: 0, proximity: this.proximity.proximity, state: 'HOVER',
+      intent: 'IDLE', wiping: false, wipeRadius: 0 };
+  }
+
   private lose() {
-    this.proximity.reset();
-    this.calibrationPhase = 'waiting';
-    this.calibSamples     = [];
+    this.intentTracker.reset();
+    this.proximityPen = false;
     this.hadPosition      = false;
     this.lastTime         = 0;
   }
