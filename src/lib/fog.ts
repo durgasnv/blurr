@@ -1,4 +1,6 @@
-export type Point = { x: number; y: number; at: number; refogProgress: number };
+import { forEachStamp } from '../simulation/stamps';
+
+export type Point = { x: number; y: number; at: number; refogProgress: number; radius: number; strength: number };
 
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
@@ -7,6 +9,7 @@ export class FogCanvas {
   private ctx: CanvasRenderingContext2D;
   private texture = document.createElement('canvas');
   private points: Point[] = [];
+  private lastWipe: Point | null = null;
   private width = 1;
   private height = 1;
   private dpr = 1;
@@ -34,10 +37,11 @@ export class FogCanvas {
     this.dirty = true;
   }
 
-  addPoint(x: number, y: number, at: number, connect: boolean) {
-    const next = { x: clamp(x), y: clamp(y), at, refogProgress: 0 };
+  addPoint(x: number, y: number, at: number, connect: boolean, radius = 15, strength = 1) {
+    const next = { x: clamp(x), y: clamp(y), at, refogProgress: 0, radius, strength };
     const previous = this.points.at(-1);
-    if (connect && previous && at - previous.at < 95) {
+    if (connect && previous && at - previous.at < 250
+      && Math.hypot(next.x - previous.x, next.y - previous.y) <= 0.3) {
       const distance = Math.hypot((next.x - previous.x) * this.width, (next.y - previous.y) * this.height);
       const step = Math.max(3, Math.min(this.width, this.height) * 0.009);
       const count = Math.ceil(distance / step);
@@ -48,11 +52,22 @@ export class FogCanvas {
           y: previous.y + (next.y - previous.y) * t,
           at: previous.at + (at - previous.at) * t,
           refogProgress: 0,
+          radius,
+          strength,
         });
       }
     }
     this.points.push(next);
     this.dirty = true;
+  }
+
+  addWipePoint(x: number, y: number, at: number, connect: boolean, radius: number) {
+    const from = connect && this.lastWipe && at - this.lastWipe.at < 250
+      ? this.lastWipe : { x, y };
+    forEachStamp(from, { x, y }, radius, this.width, this.height, (stampX, stampY) => {
+      this.addPoint(stampX, stampY, at, false, radius, 0.34);
+    });
+    this.lastWipe = { x, y, at, refogProgress: 0, radius, strength: 0.34 };
   }
 
   refog(amount: number) {
@@ -78,8 +93,8 @@ export class FogCanvas {
     ctx.globalAlpha = 1;
 
     // A pale, wet rim sits just outside each wiped point.
-    const radius = clamp(Math.min(this.width, this.height) * 0.026, 17, 33);
     for (const point of this.points) {
+      const radius = point.radius;
       const age = now - point.at;
       const life = (age < 10000 ? 1 : clamp((20000 - age) / 10000)) * (1 - point.refogProgress);
       if (life <= 0) continue;
@@ -98,14 +113,15 @@ export class FogCanvas {
     // Destination-out removes the fog itself; partial alpha restores it over time.
     ctx.globalCompositeOperation = 'destination-out';
     for (const point of this.points) {
+      const radius = point.radius;
       const age = now - point.at;
       const life = (age < 10000 ? 1 : clamp((20000 - age) / 10000)) * (1 - point.refogProgress);
       if (life <= 0) continue;
       const x = point.x * this.width;
       const y = point.y * this.height;
       const gradient = ctx.createRadialGradient(x, y, radius * 0.42, x, y, radius);
-      gradient.addColorStop(0, `rgba(0,0,0,${life})`);
-      gradient.addColorStop(0.62, `rgba(0,0,0,${life * 0.93})`);
+      gradient.addColorStop(0, `rgba(0,0,0,${life * point.strength})`);
+      gradient.addColorStop(0.62, `rgba(0,0,0,${life * point.strength * 0.93})`);
       gradient.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = gradient;
       ctx.beginPath();

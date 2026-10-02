@@ -27,6 +27,7 @@ export default function App() {
   const startupRef         = useRef(0);
   const stageRef           = useRef<Stage>('intro');
   const lastPointRef       = useRef(false);
+  const lastWipeRef        = useRef(false);
   const revealAtRef        = useRef(0);
   const lastFrameRef       = useRef(0);
   const webglReadyRef      = useRef(false);
@@ -156,10 +157,15 @@ export default function App() {
       const dt    = lastFrameRef.current ? Math.min(60, now - lastFrameRef.current) : 16;
       lastFrameRef.current = now;
 
+      const hand = trackerRef.current?.update(now);
+      const interacting = !!(hand?.visible && (hand.touching || hand.wiping))
+        || (hand === null && (lastPointRef.current || lastWipeRef.current) && now - lastHandAtRef.current < 250);
+      glassRef.current?.setDrawing(interacting);
+
       // --- breath ---
       const blow    = breathRef.current?.update(now);
       const breath  = blow?.blowStrength ?? 0;
-      if (breath > 0.03) {
+      if (!interacting && breath > 0.03) {
         fog.setIntensity(fog.intensity + breath * dt * 0.001);
         fog.refog(breath * dt * 0.004);
         lastActivityRef.current = now;
@@ -168,16 +174,13 @@ export default function App() {
       } else if (fog.intensity > 0) {
         fog.setIntensity(fog.intensity - dt * 0.0000007);
       }
-      glassRef.current?.addBreath(breath, dt, blow?.blowDuration ?? 0);
+      if (!interacting) glassRef.current?.addBreath(breath, dt, blow?.blowDuration ?? 0);
 
       if (fog.intensity > 0.04 && !hasMistRef.current) {
         hasMistRef.current = true;
         setHasMist(true);
       }
       if (stageRef.current === 'blow' && fog.intensity > 0.18) changeStage('raise');
-
-      // --- hand tracking ---
-      const hand = trackerRef.current?.update(now);
 
       // debug cursor (always, even without fog)
       if (debug) drawDebugCursor(hand ?? null);
@@ -227,11 +230,17 @@ export default function App() {
       }
 
       // --- drawing: only when TOUCHING_GLASS and fog exists ---
-      if (hand?.visible && hand.touching && fog.intensity > 0.03) {
+      if (hand?.visible && hand.wiping && fog.intensity > 0.03) {
+        glassRef.current?.wipeAt(hand, hand.wipeRadius, now, lastWipeRef.current);
+        fog.addWipePoint(hand.x, hand.y, now, lastWipeRef.current, hand.wipeRadius * window.innerHeight);
+        lastWipeRef.current = true;
+        lastPointRef.current = false;
+      } else if (hand?.visible && hand.touching && fog.intensity > 0.03) {
         totalDrawMsRef.current += lastHandAtRef.current ? Math.min(100, now - lastHandAtRef.current) : 0;
         glassRef.current?.drawAt(hand, now, lastPointRef.current);
         fog.addPoint(hand.x, hand.y, now, lastPointRef.current);
         lastPointRef.current = true;
+        lastWipeRef.current = false;
 
         if (stageRef.current === 'raise') {
           changeStage('draw');
@@ -247,8 +256,9 @@ export default function App() {
           artistShownRef.current = true;
           showWhisper('okay artist.', now);
         }
-      } else {
+      } else if (hand) {
         lastPointRef.current = false;
+        lastWipeRef.current = false;
       }
 
       if (hand) lastHandAtRef.current = now;
