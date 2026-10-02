@@ -40,6 +40,8 @@ export class HandTracker {
   private proximity     = new ProximityTracker();
   private intentTracker  = new HandIntentTracker();
   private proximityPen   = false;
+  private drawingHeld    = false;
+  private releasedFrames = 0;
   private rawX           = 0;
   private rawY           = 0;
   private smoothX       = 0;
@@ -177,12 +179,21 @@ export class HandTracker {
     const intent = this.intentTracker.update(landmarks);
     if (intent === 'WIPE' || touchState === 'HOVER') this.proximityPen = false;
     else if (!this.proximityPen && isIndexExtended(landmarks)) this.proximityPen = true;
+    if (intent === 'WIPE') {
+      this.drawingHeld = false;
+      this.releasedFrames = 0;
+    } else if (intent === 'DRAW' || this.proximityPen) {
+      this.drawingHeld = true;
+      this.releasedFrames = 0;
+    } else if (++this.releasedFrames >= 2) {
+      this.drawingHeld = false;
+    }
     const wipeRadius = handWidth(landmarks) * displayedWidth / height * 1.6;
 
     return {
       x:         this.smoothX,
       y:         this.smoothY,
-      touching:  intent === 'DRAW' || this.proximityPen,
+      touching:  this.drawingHeld,
       visible:   inside,
       handScale,
       proximity: this.proximity.proximity,
@@ -202,6 +213,8 @@ export class HandTracker {
   private lose() {
     this.intentTracker.reset();
     this.proximityPen = false;
+    this.drawingHeld = false;
+    this.releasedFrames = 0;
     this.hadPosition      = false;
     this.lastTime         = 0;
   }
