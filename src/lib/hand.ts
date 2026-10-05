@@ -1,4 +1,5 @@
-import { FilesetResolver, HandLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision';
+import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
+import { DetectorClient } from '../vision/detectorClient';
 import { measureHandScale, ProximityTracker, type HandGesture } from '../vision/gestures';
 import { handWidth, HandIntentTracker, isIndexExtended, type HandIntent } from '../vision/handIntent';
 
@@ -24,17 +25,14 @@ export type HandState = {
 // ---------------------------------------------------------------------------
 export type CalibrationPhase = 'waiting' | 'sampling' | 'done';
 
-const MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
-const WASM  = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm';
 const clamp = (n: number) => Math.min(1, Math.max(0, n));
 
 const CALIBRATION_DURATION_MS = 1000;
 const CALIBRATION_MIN_SAMPLES = 8;
 
 export class HandTracker {
-  private landmarker: HandLandmarker;
+  private landmarker: DetectorClient<NormalizedLandmark[][]>;
   private video: HTMLVideoElement;
-  private lastVideoTime = -1;
   private lastSeen      = 0;
   private lastTime      = 0;
   private proximity     = new ProximityTracker();
@@ -55,7 +53,7 @@ export class HandTracker {
   private calibStartAt               = 0;
 
   private constructor(
-    landmarker: HandLandmarker,
+    landmarker: DetectorClient<NormalizedLandmark[][]>,
     video: HTMLVideoElement,
     onLandmarks?: (landmarks: NormalizedLandmark[] | null, video: HTMLVideoElement) => void,
     onCalibrationPhase?: (phase: CalibrationPhase) => void,
@@ -71,39 +69,20 @@ export class HandTracker {
     onLandmarks?: (landmarks: NormalizedLandmark[] | null, video: HTMLVideoElement) => void,
     onCalibrationPhase?: (phase: CalibrationPhase) => void,
   ) {
-    const vision = await FilesetResolver.forVisionTasks(WASM);
-    let landmarker: HandLandmarker;
-    const options = {
-      baseOptions: { modelAssetPath: MODEL, delegate: 'GPU' as const },
-      runningMode: 'VIDEO' as const,
-      numHands: 1,
-      minHandDetectionConfidence: 0.55,
-      minHandPresenceConfidence: 0.50,
-      minTrackingConfidence: 0.50,
-    };
-    try {
-      landmarker = await HandLandmarker.createFromOptions(vision, options);
-    } catch {
-      landmarker = await HandLandmarker.createFromOptions(vision, {
-        ...options,
-        baseOptions: { modelAssetPath: MODEL, delegate: 'CPU' },
-      });
-    }
+    const landmarker = await DetectorClient.create<NormalizedLandmark[][]>('hand');
     return new HandTracker(landmarker, video, onLandmarks, onCalibrationPhase);
   }
 
   update(now: number): HandState | null {
     if (this.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || this.video.videoWidth === 0) return null;
-    if (this.video.currentTime === this.lastVideoTime) {
+    const hands = this.landmarker.update(this.video, now, 50);
+    if (hands === undefined) {
       if (now - this.lastSeen > 250) {
         this.lose();
         return this.missingState();
       }
       return null;
     }
-    this.lastVideoTime = this.video.currentTime;
-
-    const hands     = this.landmarker.detectForVideo(this.video, now).landmarks;
     const landmarks = hands[0];
     this.onLandmarks?.(landmarks ?? null, this.video);
 

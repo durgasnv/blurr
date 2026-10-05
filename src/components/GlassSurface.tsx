@@ -135,7 +135,6 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     setFingertipRef.current = point => {
       const uv = point ? viewportToGlassUv(point) : { x: -1, y: -1 };
       material.uniforms.uFinger.value.set(uv.x, uv.y);
-      if (debug) renderer.render(scene, camera);
     };
     drawAtRef.current = (point, at, connect, brushSize) => {
       const uv = viewportToGlassUv(point);
@@ -153,7 +152,6 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       lastDrawAt = at;
       wetUntil = at + 6000;
       droplets.disturb(uv);
-      renderer.render(scene, camera);
     };
     wipeAtRef.current = (point, radius, at, connect) => {
       const from = connect && lastWipePoint && at - lastWipeAt < 250 ? lastWipePoint : point;
@@ -166,7 +164,6 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       lastWipePoint = point;
       lastWipeAt = at;
       wetUntil = at + 6000;
-      renderer.render(scene, camera);
     };
     setDrawingRef.current = active => { isDrawing = active; };
     setBreathCenterRef.current = point => fogMask.setBlowCenter(viewportToGlassUv(point));

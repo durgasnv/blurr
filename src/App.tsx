@@ -255,7 +255,7 @@ export default function App() {
       const blowDuration = demoBreathRef.current ? now - demoSinceRef.current : blow?.blowDuration ?? 0;
       if (!interacting && breath > 0.03) {
         fog.setIntensity(fog.intensity + breath * dt * 0.001);
-        fog.refog(breath * dt * 0.004);
+        if (!webglReadyRef.current) fog.refog(breath * dt * 0.004);
         lastActivityRef.current = now;
         idleShownRef.current    = false;
         if (whisperRef.current) showWhisper('', now, 0);
@@ -320,13 +320,13 @@ export default function App() {
       // --- drawing: only when TOUCHING_GLASS and fog exists ---
       if (hand?.visible && hand.wiping && fog.intensity > 0.03) {
         glassRef.current?.wipeAt(hand, hand.wipeRadius, now, lastWipeRef.current);
-        fog.addWipePoint(hand.x, hand.y, now, lastWipeRef.current, hand.wipeRadius * window.innerHeight);
+        if (!webglReadyRef.current) fog.addWipePoint(hand.x, hand.y, now, lastWipeRef.current, hand.wipeRadius * window.innerHeight);
         lastWipeRef.current = true;
         lastPointRef.current = false;
       } else if (hand?.visible && hand.touching && fog.intensity > 0.03) {
         totalDrawMsRef.current += lastHandAtRef.current ? Math.min(100, now - lastHandAtRef.current) : 0;
         glassRef.current?.drawAt(hand, now, lastPointRef.current, brushSizeRef.current);
-        fog.addPoint(hand.x, hand.y, now, lastPointRef.current, brushSizeRef.current);
+        if (!webglReadyRef.current) fog.addPoint(hand.x, hand.y, now, lastPointRef.current, brushSizeRef.current);
         lastPointRef.current = true;
         lastWipeRef.current = false;
 
