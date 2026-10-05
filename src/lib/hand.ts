@@ -188,7 +188,8 @@ export class HandTracker {
     } else if (++this.releasedFrames >= 2) {
       this.drawingHeld = false;
     }
-    const wipeRadius = handWidth(landmarks) * displayedWidth / height * 1.6;
+    const wipeRadius = handWidth(landmarks, this.video.videoWidth / this.video.videoHeight)
+      * displayedHeight / height * 1.6;
 
     return {
       x:         this.smoothX,

@@ -4,8 +4,13 @@ export type HandIntent = 'IDLE' | 'DRAW' | 'WIPE';
 
 const distance = (a: NormalizedLandmark, b: NormalizedLandmark) => Math.hypot(a.x - b.x, a.y - b.y);
 
-export function handWidth(landmarks: NormalizedLandmark[]): number {
-  return Math.max(distance(landmarks[5], landmarks[17]), distance(landmarks[0], landmarks[9]));
+export function handWidth(landmarks: NormalizedLandmark[], videoAspect: number): number {
+  const pixelShapeDistance = (a: NormalizedLandmark, b: NormalizedLandmark) =>
+    Math.hypot((a.x - b.x) * videoAspect, a.y - b.y);
+  return Math.max(
+    pixelShapeDistance(landmarks[5], landmarks[17]),
+    pixelShapeDistance(landmarks[0], landmarks[9]),
+  );
 }
 
 export function isFist(landmarks: NormalizedLandmark[]): boolean {
