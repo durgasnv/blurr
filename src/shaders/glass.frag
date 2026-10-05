@@ -18,6 +18,62 @@ vec3 sampleBackground(vec2 uv) {
   return texture2D(uCamera, clamp(cameraUv, 0.0, 1.0)).rgb;
 }
 
+vec3 diffuseBackground(vec2 uv, float radius) {
+  vec2 blur = vec2(radius / uAspect, radius);
+  if (uQuality > 1.5) {
+    vec3 sum = sampleBackground(uv) * 0.25;
+    sum += sampleBackground(uv + vec2(blur.x, 0.0)) * 0.125;
+    sum += sampleBackground(uv - vec2(blur.x, 0.0)) * 0.125;
+    sum += sampleBackground(uv + vec2(0.0, blur.y)) * 0.125;
+    sum += sampleBackground(uv - vec2(0.0, blur.y)) * 0.125;
+    sum += sampleBackground(uv + blur) * 0.0625;
+    sum += sampleBackground(uv - blur) * 0.0625;
+    sum += sampleBackground(uv + vec2(blur.x, -blur.y)) * 0.0625;
+    sum += sampleBackground(uv + vec2(-blur.x, blur.y)) * 0.0625;
+    return sum;
+  }
+  vec3 sum = sampleBackground(uv) * 0.4;
+  sum += sampleBackground(uv + vec2(blur.x, 0.0)) * 0.15;
+  sum += sampleBackground(uv - vec2(blur.x, 0.0)) * 0.15;
+  sum += sampleBackground(uv + vec2(0.0, blur.y)) * 0.15;
+  sum += sampleBackground(uv - vec2(0.0, blur.y)) * 0.15;
+  return sum;
+}
+
+float microDroplets(vec2 uv, out vec2 normal, out float highlight, out float rim) {
+  vec2 grid = uv * vec2(uAspect, 1.0) * 92.0;
+  vec2 cell = floor(grid);
+  vec2 local = fract(grid);
+  float nearest = 10.0;
+  float beadRadius = 0.14;
+  vec2 beadDelta = vec2(0.0);
+  float seed = 0.0;
+  for (int y = -1; y <= 1; y++) {
+    for (int x = -1; x <= 1; x++) {
+      vec2 offset = vec2(float(x), float(y));
+      vec2 candidate = cell + offset;
+      float id = hash21(candidate);
+      vec2 center = vec2(hash21(candidate + vec2(3.1)), hash21(candidate + vec2(7.7))) * 0.62 + 0.19;
+      vec2 delta = offset + center - local;
+      float distanceToBead = length(delta);
+      if (distanceToBead < nearest) {
+        nearest = distanceToBead;
+        beadDelta = delta;
+        beadRadius = mix(0.09, 0.22, hash21(candidate + vec2(11.4)));
+        seed = id;
+      }
+    }
+  }
+  float body = 1.0 - smoothstep(beadRadius * 0.52, beadRadius, nearest);
+  rim = smoothstep(beadRadius * 0.72, beadRadius * 0.90, nearest)
+    * (1.0 - smoothstep(beadRadius * 0.90, beadRadius, nearest));
+  vec2 direction = beadDelta / max(nearest, 0.001);
+  normal = vec2(direction.x / uAspect, direction.y) * body * beadRadius * 0.32 / 92.0;
+  vec2 glintOffset = beadDelta + vec2(0.055, -0.065);
+  highlight = exp(-dot(glintOffset, glintOffset) * 1200.0) * (0.55 + seed * 0.45);
+  return body;
+}
+
 void main() {
   vec2 drift = vec2(uTime * 0.012, -uTime * 0.007);
   float cloud = uQuality < 0.5 ? valueNoise(vUv * 3.8 + drift) : fbm(vUv * 3.8 + drift);
@@ -28,6 +84,12 @@ void main() {
   float mask = moisture.r;
   float wet = moisture.g;
   float fog = mask * smoothstep(0.08, 0.72, density);
+  vec2 beadNormal = vec2(0.0);
+  float beadHighlight = 0.0;
+  float beadRim = 0.0;
+  float beads = 0.0;
+  if (uQuality > 0.5) beads = microDroplets(vUv, beadNormal, beadHighlight, beadRim);
+  float beadVisibility = smoothstep(0.14, 0.48, mask) * smoothstep(0.14, 0.48, density);
   vec2 texel = vec2(0.0025 / uAspect, 0.0025);
   vec2 maskSlope = vec2(
     texture2D(uFogMask, vUv + vec2(texel.x, 0.0)).r - texture2D(uFogMask, vUv - vec2(texel.x, 0.0)).r,
@@ -58,17 +120,16 @@ void main() {
     dropNormal += delta / max(distanceToDrop, 0.001) * lens * radius * 0.35 * dropVisibility;
     dropRim += edge * dropVisibility;
   }
-  vec2 displaced = clamp(vUv + (maskSlope * 0.012 + surfaceSlope * 0.025) * fog + wetSlope * wet * 0.018 + dropNormal, 0.0, 1.0);
+  vec2 displaced = clamp(vUv + (maskSlope * 0.018 + surfaceSlope * 0.012) * fog + wetSlope * wet * 0.025 + dropNormal + beadNormal * beadVisibility, 0.0, 1.0);
   vec3 sharp = sampleBackground(displaced);
-  vec2 blurOffset = vec2(0.012 / uAspect, 0.012) * fog;
-  vec3 diffused = sharp;
-  if (uQuality > 1.5) {
-    diffused = (sampleBackground(displaced + blurOffset) + sampleBackground(displaced - blurOffset)) * 0.5;
-  } else if (uQuality > 0.5) {
-    diffused = sampleBackground(displaced + blurOffset);
-  }
-  vec3 color = mix(sharp, diffused, fog * 0.7);
-  color = mix(color, vec3(0.59, 0.68, 0.63), fog * 0.42);
+  float blurRadius = mix(0.002, 0.048, smoothstep(0.03, 0.72, fog));
+  vec3 diffused = diffuseBackground(displaced, blurRadius);
+  float diffusion = smoothstep(0.015, 0.58, fog);
+  vec3 color = mix(sharp, diffused, diffusion * 0.94);
+  float scattering = diffusion * (0.10 + density * 0.07);
+  color = mix(color, vec3(0.88, 0.90, 0.89), scattering);
+  color = mix(color, color * 0.88, beadRim * beadVisibility * 0.18);
+  color += beadHighlight * beads * beadVisibility * vec3(0.035, 0.04, 0.035);
   color = mix(color, color * 0.70 + vec3(0.035, 0.064, 0.048), wet * 0.5);
   color += wet * max(0.0, wetSlope.y) * vec3(0.11, 0.16, 0.12);
   color = mix(color, color * 0.78, clamp(dropRim, 0.0, 1.0) * 0.26);
