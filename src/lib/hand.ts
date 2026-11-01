@@ -40,8 +40,9 @@ export class HandTracker {
   private proximityPen   = false;
   private drawingHeld    = false;
   private releasedFrames = 0;
-  private rawX           = 0;
-  private rawY           = 0;
+  private targetX = 0;
+  private targetY = 0;
+  private latest: HandState | null = null;
   private smoothX       = 0;
   private smoothY       = 0;
   private hadPosition   = false;
@@ -82,7 +83,7 @@ export class HandTracker {
         this.lose();
         return this.missingState();
       }
-      return null;
+      return this.interpolate(now);
     }
     const landmarks = hands[0];
     this.onLandmarks?.(landmarks ?? null, this.video);
@@ -140,22 +141,14 @@ export class HandTracker {
 
     const x  = clamp(mappedX);
     const y  = clamp(mappedY);
-    const dt = this.lastTime ? Math.min(50, now - this.lastTime) : 16;
-    const rawAlpha = 1 - Math.pow(0.55, dt / 16.7);
-    const brushAlpha = 1 - Math.pow(0.78, dt / 16.7);
+    this.targetX = x;
+    this.targetY = y;
     if (!this.hadPosition) {
-      this.rawX = x;
-      this.rawY = y;
       this.smoothX = x;
       this.smoothY = y;
       this.hadPosition = true;
-    } else {
-      this.rawX += (x - this.rawX) * rawAlpha;
-      this.rawY += (y - this.rawY) * rawAlpha;
-      this.smoothX += (this.rawX - this.smoothX) * brushAlpha;
-      this.smoothY += (this.rawY - this.smoothY) * brushAlpha;
+      this.lastTime = now;
     }
-    this.lastTime = now;
     const intent = this.intentTracker.update(landmarks);
     this.proximityPen = intent !== 'WIPE' && touchState === 'TOUCHING_GLASS' && isPointing(landmarks);
     if (intent === 'WIPE') {
@@ -170,7 +163,7 @@ export class HandTracker {
     const wipeRadius = handWidth(landmarks, this.video.videoWidth / this.video.videoHeight)
       * displayedHeight / height * 1.6;
 
-    return {
+    this.latest = {
       x:         this.smoothX,
       y:         this.smoothY,
       touching:  this.drawingHeld,
@@ -182,6 +175,20 @@ export class HandTracker {
       wiping:   intent === 'WIPE',
       wipeRadius,
     };
+    return this.interpolate(now);
+  }
+
+  private interpolate(now: number): HandState | null {
+    if (!this.latest) return null;
+    const dt = Math.max(0, Math.min(100, now - this.lastTime));
+    this.lastTime = now;
+    // Follow new inference positions every display frame, without prediction.
+    const alpha = 1 - Math.exp(-dt / 35);
+    this.smoothX += (this.targetX - this.smoothX) * alpha;
+    this.smoothY += (this.targetY - this.smoothY) * alpha;
+    this.latest.x = this.smoothX;
+    this.latest.y = this.smoothY;
+    return this.latest;
   }
 
   private missingState(): HandState {
@@ -191,6 +198,7 @@ export class HandTracker {
   }
 
   private lose() {
+    this.latest = null;
     this.intentTracker.reset();
     this.proximity.release();
     this.proximityPen = false;

@@ -31,7 +31,7 @@ export function ExperienceOverlay({ stage, hasMist, error, loadingMessage, touch
     calibrate: 'Hold your open hand at a comfortable distance for one second in good light.',
     blow: 'Blow steadily toward your microphone to mist the glass.',
     raise: 'Point your index finger and move closer, or pinch thumb and index finger to draw.',
-    draw: 'Move your finger to draw. Open your hand to pause; make a fist to wipe.',
+    draw: 'Move your finger to draw. Lower your finger to pause. Hold an open palm toward the camera to clear the glass.',
   };
 
   useEffect(() => {

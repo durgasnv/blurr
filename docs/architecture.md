@@ -10,7 +10,7 @@ The Three.js glass and MediaPipe tracker are loaded as separate JavaScript chunk
 
 `src/lib/hand.ts` runs inference only when the camera supplies a new video frame. It reads landmark 8, maps the tip through the visible `object-fit: cover` crop, mirrors it, and smooths its position in two stages. A brief tracking gap under 250 ms keeps the stroke alive. `src/vision/coordinateMapper.ts` then converts normalized top-left viewport coordinates into bottom-left WebGL UV coordinates.
 
-`src/vision/gestures.ts` retains calibrated hand proximity. `src/vision/handIntent.ts` adds size-relative pinch hysteresis and a four-finger fist check. Drawing can begin through proximity or pinch; a fist makes a broad wipe. A pen release needs two consecutive frames. Wipe stamps are spaced by distance, capped at 40 per frame, and never bridge a tracking jump over 30% of the screen width. There are no pointer, touch, stylus, or keyboard drawing listeners.
+`src/vision/gestures.ts` retains calibrated hand proximity. `src/vision/handIntent.ts` adds size-relative pinch hysteresis and a sustained open-palm check. Drawing can begin through proximity or pinch; a fist pauses drawing and holding a spread open palm clears the glass. A pen release needs two consecutive frames. Wipe stamps are spaced by distance, capped at 40 per frame, and never bridge a tracking jump over 30% of the screen width. There are no pointer, touch, stylus, or keyboard drawing listeners.
 
 ## Audio path
 

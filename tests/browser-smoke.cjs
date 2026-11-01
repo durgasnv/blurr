@@ -136,6 +136,17 @@ const server = http.createServer(async (req, res) => {
     let fog=0,wet=0,memory=0;
     for(let i=0;i<pixels.length;i+=4){fog+=pixels[i];wet+=pixels[i+1];memory+=pixels[i+2];}
     const result={fog:fog/64,wet:wet/64,memory:memory/64,error:gl.getError()};
+    // A fingertip erases its neighborhood while distant fog stays intact.
+    gl.bindTexture(gl.TEXTURE_2D,read);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,write,0);
+    uniform('uRegeneration',0);uniform('uWetDecay',0);
+    uniform('uEraseRadius',.18);uniform('uEraseStrength',1);
+    gl.uniform2f(gl.getUniformLocation(program,'uEraseFrom'),.5,.5);
+    gl.uniform2f(gl.getUniformLocation(program,'uEraseTo'),.5,.5);
+    gl.drawArrays(gl.TRIANGLES,0,6);
+    gl.readPixels(0,0,8,8,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+    result.strokeCenter=pixels[(3*8+3)*4];
+    result.distantFog=pixels[0];
     gl.getExtension('WEBGL_lose_context')?.loseContext();
     return result;
   },{noise,mask});
@@ -143,6 +154,8 @@ const server = http.createServer(async (req, res) => {
   assert.ok(byteState.fog>100, JSON.stringify(byteState));
   assert.ok(byteState.wet<10, JSON.stringify(byteState));
   assert.equal(byteState.memory,128);
+  assert.ok(byteState.strokeCenter<10, JSON.stringify(byteState));
+  assert.ok(byteState.distantFog>100, JSON.stringify(byteState));
   console.log('PASS real byte-target shader refills fog and decays moisture below byte precision');
   await context.close();
   const fallbackContext = await browser.newContext();

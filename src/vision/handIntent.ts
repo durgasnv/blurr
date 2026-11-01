@@ -24,27 +24,43 @@ export function isIndexExtended(landmarks: NormalizedLandmark[]): boolean {
   return distance(landmarks[8], landmarks[0]) > distance(landmarks[6], landmarks[0]);
 }
 
-/** Proximity drawing needs an index-only pose; an open palm is a pause. */
+/** Proximity drawing needs an index-only pose. */
 export function isPointing(landmarks: NormalizedLandmark[]): boolean {
   return isIndexExtended(landmarks) && [[12, 10], [16, 14], [20, 18]].every(([tip, middle]) =>
     distance(landmarks[tip], landmarks[0]) <= distance(landmarks[middle], landmarks[0]) * 1.08,
   );
 }
 
+export function isOpenPalm(landmarks: NormalizedLandmark[]): boolean {
+  const wrist = landmarks[0];
+  // Require all four fingers to be clearly extended and a spread thumb.
+  // A pointing finger or a brief tracking error must never clear the screen.
+  const extended = [[8, 6], [12, 10], [16, 14], [20, 18]].every(([tip, middle]) =>
+    distance(landmarks[tip], wrist) > distance(landmarks[middle], wrist) * 1.18,
+  );
+  const width = Math.max(.001, distance(landmarks[5], landmarks[17]));
+  return extended && distance(landmarks[4], landmarks[5]) > width * .45
+    && distance(landmarks[8], landmarks[20]) > width * .8;
+}
+
 export class HandIntentTracker {
   private drawing = false;
   private releaseFrames = 0;
-  private fistFrames = 0;
+  private palmFrames = 0;
 
   update(landmarks: NormalizedLandmark[]): HandIntent {
-    if (isFist(landmarks)) {
-      this.fistFrames++;
-      if (this.fistFrames < 2) return this.drawing ? 'DRAW' : 'IDLE';
+    if (isOpenPalm(landmarks)) {
+      this.palmFrames++;
       this.drawing = false;
       this.releaseFrames = 0;
-      return this.fistFrames >= 2 ? 'WIPE' : 'IDLE';
+      return this.palmFrames >= 5 ? 'WIPE' : 'IDLE';
     }
-    this.fistFrames = 0;
+    this.palmFrames = 0;
+    if (isFist(landmarks)) {
+      this.drawing = false;
+      this.releaseFrames = 0;
+      return 'IDLE';
+    }
 
     const wrist = landmarks[0];
     const indexExtended = isIndexExtended(landmarks);
@@ -64,6 +80,6 @@ export class HandIntentTracker {
   reset() {
     this.drawing = false;
     this.releaseFrames = 0;
-    this.fistFrames = 0;
+    this.palmFrames = 0;
   }
 }

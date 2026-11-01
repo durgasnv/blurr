@@ -364,8 +364,14 @@ export default function App() {
 
       // --- drawing: only when TOUCHING_GLASS and fog exists ---
       if (canDraw && hand?.visible && hand.wiping && fog.intensity > 0.03) {
-        glassRef.current?.wipeAt(hand, hand.wipeRadius, now, lastWipeRef.current);
-        if (!webglReadyRef.current) fog.addWipePoint(hand.x, hand.y, now, lastWipeRef.current, hand.wipeRadius * window.innerHeight);
+        if (!lastWipeRef.current) {
+          glassRef.current?.reset();
+          fog.clearDrawing();
+          fog.setIntensity(0);
+          hasMistRef.current = false;
+          setHasMist(false);
+          changeStage('blow');
+        }
         lastWipeRef.current = true;
         lastPointRef.current = false;
       } else if (canDraw && hand?.visible && hand.touching && fog.intensity > 0.03) {
@@ -394,7 +400,8 @@ export default function App() {
         }
       } else if (hand) {
         lastPointRef.current = false;
-        lastWipeRef.current = false;
+        // A palm already held during calibration/breath is not a new clear gesture.
+        lastWipeRef.current = hand.wiping;
       }
 
       if (hand) lastHandAtRef.current = now;

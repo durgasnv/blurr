@@ -99,5 +99,25 @@ test('open palm pauses proximity drawing; an index-only pose enables it', async 
   assert.equal(intent.update(lm), 'IDLE');
   lm[8].y = .65;
   assert.equal(intent.update(lm), 'IDLE');
-  assert.equal(intent.update(lm), 'WIPE');
+  assert.equal(intent.update(lm), 'IDLE');
+});
+
+test('only a sustained open palm clears; pointing and curled fingers never wipe', async () => {
+  const { HandIntentTracker, isOpenPalm } = await load('src/vision/handIntent.ts');
+  const p = (x,y) => ({x,y,z:0});
+  const lm = Array.from({length:21}, () => p(.5,.5));
+  lm[0]=p(.5,.8);lm[5]=p(.4,.55);lm[17]=p(.6,.55);lm[9]=p(.5,.55);lm[4]=p(.2,.5);
+  for (const [tip, middle, x] of [[8,6,.35],[12,10,.45],[16,14,.55],[20,18,.65]]) {
+    lm[middle]=p(x,.4);lm[tip]=p(x,.15);
+  }
+  assert.equal(isOpenPalm(lm),true);
+  const tracker = new HandIntentTracker();
+  for(let i=0;i<4;i++) assert.equal(tracker.update(lm),'IDLE');
+  assert.equal(tracker.update(lm),'WIPE');
+  for(const tip of [12,16,20]) lm[tip].y=.65;
+  assert.equal(isOpenPalm(lm),false);
+  for(let i=0;i<10;i++) assert.notEqual(tracker.update(lm),'WIPE');
+  lm[8].y=.65;
+  for(let i=0;i<10;i++) assert.equal(tracker.update(lm),'IDLE');
+  tracker.reset();
 });
