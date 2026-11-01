@@ -15,8 +15,8 @@ Open the local address shown by Vite. Use `npm run build` for a production build
 
 1. Select **enable camera + mic**, then hold an open hand at a comfortable distance for one second to calibrate. You can cancel loading or stop the camera and microphone with the button at the top right.
 2. Blow steadily toward the microphone. Brief clicks and claps should not build significant fog.
-3. Point one index finger toward the camera and move your hand closer to the glass, or pinch thumb and index finger together, to draw in the air. Hold a spread open palm toward the camera to clear the entire glass; a fist pauses drawing.
-4. Wait for the path to refog, or blow again to add more condensation. Fog growth pauses while you draw or wipe.
+3. Point one index finger toward the camera and move your hand closer to the glass, or pinch thumb and index finger together, to draw in the air. Hold a spread open palm toward the camera to clear the entire glass; blow again to cover existing drawings with fresh fog.
+4. Wait for the path to refog, or blow again to add more condensation. Blowing takes priority over drawing and covers cleared strokes with fog again.
 
 The bottom-left brush slider adjusts the drawing radius from 7 to 38 pixels; the shutter button saves a PNG. Optional keyboard shortcuts: hold Space to demonstrate breath without sound, C to clear drawing, S to save, and Esc to return to the start screen. Drawing itself needs no pointer or keyboard input.
 

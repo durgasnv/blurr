@@ -13,13 +13,6 @@ export function handWidth(landmarks: NormalizedLandmark[], videoAspect: number):
   );
 }
 
-export function isFist(landmarks: NormalizedLandmark[]): boolean {
-  const wrist = landmarks[0];
-  return [[8, 6], [12, 10], [16, 14], [20, 18]].every(([tip, middle]) =>
-    distance(landmarks[tip], wrist) < distance(landmarks[middle], wrist),
-  );
-}
-
 export function isIndexExtended(landmarks: NormalizedLandmark[]): boolean {
   return distance(landmarks[8], landmarks[0]) > distance(landmarks[6], landmarks[0]);
 }
@@ -44,42 +37,17 @@ export function isOpenPalm(landmarks: NormalizedLandmark[]): boolean {
 }
 
 export class HandIntentTracker {
-  private drawing = false;
-  private releaseFrames = 0;
   private palmFrames = 0;
 
   update(landmarks: NormalizedLandmark[]): HandIntent {
     if (isOpenPalm(landmarks)) {
       this.palmFrames++;
-      this.drawing = false;
-      this.releaseFrames = 0;
       return this.palmFrames >= 5 ? 'WIPE' : 'IDLE';
     }
     this.palmFrames = 0;
-    if (isFist(landmarks)) {
-      this.drawing = false;
-      this.releaseFrames = 0;
-      return 'IDLE';
-    }
-
-    const wrist = landmarks[0];
-    const indexExtended = isIndexExtended(landmarks);
-    const handLength = Math.max(0.001, distance(wrist, landmarks[9]));
-    const pinch = distance(landmarks[4], landmarks[8]) / handLength;
-
-    if (this.drawing) {
-      this.releaseFrames = pinch > 0.38 ? this.releaseFrames + 1 : 0;
-      if (this.releaseFrames >= 2) this.drawing = false;
-    } else if (indexExtended && pinch < 0.22) {
-      this.drawing = true;
-      this.releaseFrames = 0;
-    }
-    return this.drawing ? 'DRAW' : 'IDLE';
+    // No fist/pinch/proximity pause gate: the tracked fingertip draws freely.
+    return 'DRAW';
   }
 
-  reset() {
-    this.drawing = false;
-    this.releaseFrames = 0;
-    this.palmFrames = 0;
-  }
+  reset() { this.palmFrames = 0; }
 }

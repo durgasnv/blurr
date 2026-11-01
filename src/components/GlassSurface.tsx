@@ -107,6 +107,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     });
     scene.add(new Mesh(geometry, material));
     let pendingGrowth = 0;
+    let pendingRefog = 0;
     let latestDuration = 0;
     let estimatedFog = 0;
     let lastRenderAt = 0;
@@ -132,9 +133,10 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       );
     };
     addBreathRef.current = (strength, dt, duration) => {
-      if (!isDrawing && strength > 0.03 && duration > 0) {
+      if (strength > 0.03 && duration > 0) {
         pendingGrowth += strength * dt * 0.00034;
         latestDuration = duration;
+        pendingRefog += strength * dt / 350;
       }
     };
     setFingertipRef.current = point => {
@@ -187,6 +189,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       fogMask.setBlowCenter({ x: 0.5, y: 0.48 });
       estimatedFog = 0;
       pendingGrowth = 0;
+      pendingRefog = 0;
       latestDuration = 0;
       wetUntil = 0;
       isDrawing = false;
@@ -222,7 +225,8 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       const growing = !isDrawing && ++breathFrame % 2 === 0
         && pendingGrowth >= fogMask.minimumStep && pendingGrowth > 0;
       const wetDecay = now < wetUntil ? frameMs * 0.00018 : 0;
-      const regeneration = !isDrawing && estimatedFog > 0.005 ? frameMs / 16000 : 0;
+      const regeneration = pendingRefog + (!isDrawing && estimatedFog > 0.005 ? frameMs / 16000 : 0);
+      pendingRefog = 0;
       if (growing || wetDecay > 0 || regeneration > 0) {
         fogMask.advance(growing ? pendingGrowth : 0, latestDuration, wetDecay, regeneration);
         if (growing) {

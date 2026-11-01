@@ -292,13 +292,15 @@ export default function App() {
       const canDraw = stageRef.current === 'raise' || stageRef.current === 'draw' || stageRef.current === 'experience';
       const interacting = canDraw && (!!(hand?.visible && (hand.touching || hand.wiping))
         || (hand === null && (lastPointRef.current || lastWipeRef.current) && now - lastHandAtRef.current < 250));
-      glassRef.current?.setDrawing(interacting);
+
 
       // --- breath ---
       const blow    = breathRef.current?.update(now);
       const breath  = Math.max(blow?.blowStrength ?? 0, demoBreathRef.current ? 0.55 : 0);
       const blowDuration = demoBreathRef.current ? now - demoSinceRef.current : blow?.blowDuration ?? 0;
-      if (!interacting && breath > 0.03) {
+      const refogging = breath > 0.03;
+      glassRef.current?.setDrawing(interacting && !refogging);
+      if (refogging) {
         fog.setIntensity(fog.intensity + breath * dt * 0.001);
         if (!webglReadyRef.current) fog.refog(breath * dt * 0.004);
         lastActivityRef.current = now;
@@ -307,7 +309,7 @@ export default function App() {
       } else if (!webglReadyRef.current && !interacting && fog.intensity > 0) {
         fog.setIntensity(fog.intensity - dt * 0.0000007);
       }
-      if (!interacting) glassRef.current?.addBreath(breath, dt, blowDuration);
+      glassRef.current?.addBreath(breath, dt, blowDuration);
 
       if (fog.intensity > 0.04 && !hasMistRef.current) {
         hasMistRef.current = true;
@@ -363,7 +365,7 @@ export default function App() {
       }
 
       // --- drawing: only when TOUCHING_GLASS and fog exists ---
-      if (canDraw && hand?.visible && hand.wiping && fog.intensity > 0.03) {
+      if (!refogging && canDraw && hand?.visible && hand.wiping && fog.intensity > 0.03) {
         if (!lastWipeRef.current) {
           glassRef.current?.reset();
           fog.clearDrawing();
@@ -374,7 +376,7 @@ export default function App() {
         }
         lastWipeRef.current = true;
         lastPointRef.current = false;
-      } else if (canDraw && hand?.visible && hand.touching && fog.intensity > 0.03) {
+      } else if (!refogging && canDraw && hand?.visible && hand.touching && fog.intensity > 0.03) {
         totalDrawMsRef.current += lastHandAtRef.current ? Math.min(100, now - lastHandAtRef.current) : 0;
         glassRef.current?.drawAt(hand, now, lastPointRef.current, brushSizeRef.current);
         if (!webglReadyRef.current) fog.addPoint(hand.x, hand.y, now, lastPointRef.current, brushSizeRef.current);

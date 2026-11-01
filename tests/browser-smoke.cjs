@@ -72,8 +72,9 @@ const server = http.createServer(async (req, res) => {
   await page.getByText('blow gently.',{exact:true}).waitFor({timeout:15000});
   await page.locator('main').click({position:{x:10,y:100}});
   await page.keyboard.down('Space');
-  await page.getByText('draw me something.',{exact:true}).waitFor({timeout:15000});
+  await page.getByText('come closer.',{exact:true}).waitFor({timeout:15000});
   await page.keyboard.up('Space');
+  await page.getByText('draw me something.',{exact:true}).waitFor({timeout:15000});
   await page.waitForSelector('.stage-experience', {timeout:15000});
   const [download] = await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'save mirror as PNG'}).click()]);
   assert.equal(download.suggestedFilename(),'blurr.png');

@@ -77,7 +77,7 @@ test('a worker startup error releases its resources', async () => {
   } finally { globalThis.Worker = original; }
 });
 
-test('open palm pauses proximity drawing; an index-only pose enables it', async () => {
+test('fingertip drawing stays active without pinch or fist pause gates', async () => {
   const { isPointing, HandIntentTracker } = await load('src/vision/handIntent.ts');
   const point = (x, y) => ({ x, y, z: 0 });
   const lm = Array.from({ length: 21 }, () => point(0.5, 0.5));
@@ -91,15 +91,15 @@ test('open palm pauses proximity drawing; an index-only pose enables it', async 
   lm[12].y = lm[16].y = lm[20].y = .65;
   assert.equal(isPointing(lm), true);
   const intent = new HandIntentTracker();
-  assert.equal(intent.update(lm), 'IDLE');
+  assert.equal(intent.update(lm), 'DRAW');
   lm[4] = { ...lm[8] };
   assert.equal(intent.update(lm), 'DRAW');
   lm[4] = point(.7, .5);
   assert.equal(intent.update(lm), 'DRAW');
-  assert.equal(intent.update(lm), 'IDLE');
+  assert.equal(intent.update(lm), 'DRAW');
   lm[8].y = .65;
-  assert.equal(intent.update(lm), 'IDLE');
-  assert.equal(intent.update(lm), 'IDLE');
+  assert.equal(intent.update(lm), 'DRAW');
+  assert.equal(intent.update(lm), 'DRAW');
 });
 
 test('only a sustained open palm clears; pointing and curled fingers never wipe', async () => {
@@ -118,6 +118,6 @@ test('only a sustained open palm clears; pointing and curled fingers never wipe'
   assert.equal(isOpenPalm(lm),false);
   for(let i=0;i<10;i++) assert.notEqual(tracker.update(lm),'WIPE');
   lm[8].y=.65;
-  for(let i=0;i<10;i++) assert.equal(tracker.update(lm),'IDLE');
+  for(let i=0;i<10;i++) assert.equal(tracker.update(lm),'DRAW');
   tracker.reset();
 });
