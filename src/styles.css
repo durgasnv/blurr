@@ -15,6 +15,7 @@ button { font: inherit; }
 .experience {
   position: relative;
   width: 100%;
+  height: 100vh;
   height: 100dvh;
   overflow: hidden;
   isolation: isolate;
@@ -227,4 +228,28 @@ button { font: inherit; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+.experience-copy .stage-hint { margin: 16px auto 0; max-width: 340px; line-height: 1.6; color: #e8eee7; }
+.stop-button {
+  position: absolute;
+  z-index: 12;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid rgba(250, 255, 250, 0.5);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(8, 18, 13, 0.75);
+  font-size: 12px;
+  cursor: pointer;
+}
+.stop-button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.shutter-button { width: 44px; height: 44px; }
+.brush-control { min-height: 44px; }
+.brush-control input { height: 24px; }
+.experience-copy small { color: rgba(230, 241, 228, 0.8); line-height: 1.5; }
+@media (max-height: 420px) {
+  .experience-copy { max-height: calc(100dvh - 120px); overflow-y: auto; }
 }

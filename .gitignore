@@ -2,3 +2,8 @@ node_modules
 dist
 *.tsbuildinfo
 .DS_Store
+
+# Generated from the pinned npm runtime by predev/prebuild
+public/vendor/
+.env*
+!.env.example

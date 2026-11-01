@@ -9,14 +9,18 @@ export class DetectorClient<T> {
   private result: T | undefined;
   private error: Error | undefined;
 
-  static async create<T>(kind: 'hand' | 'face') {
+  static async create<T>(kind: 'hand' | 'face', signal?: AbortSignal) {
     const client = new DetectorClient<T>();
     try {
       await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error(`${kind} tracking took too long to start`)), 60000);
-        client.worker.onerror = event => { clearTimeout(timeout); reject(new Error(event.message)); };
+        const onAbort = () => { cleanup(); reject(new DOMException('Tracking cancelled', 'AbortError')); };
+        const cleanup = () => { clearTimeout(timeout); signal?.removeEventListener('abort', onAbort); };
+        const timeout = setTimeout(() => { cleanup(); reject(new Error(`${kind} tracking took too long to start`)); }, 60000);
+        if (signal?.aborted) { onAbort(); return; }
+        signal?.addEventListener('abort', onAbort, { once: true });
+        client.worker.onerror = event => { cleanup(); reject(new Error(event.message)); };
         client.worker.onmessage = event => {
-          clearTimeout(timeout);
+          cleanup();
           if (event.data.type === 'ready') resolve();
           else reject(new Error(event.data.error));
         };
@@ -34,6 +38,7 @@ export class DetectorClient<T> {
 
   update(video: HTMLVideoElement, now: number, interval: number): T | undefined {
     if (this.error) throw this.error;
+    if (this.busy && now - this.lastAt > 15000) throw new Error('Tracking stopped responding');
     const result = this.result;
     this.result = undefined;
     if (!this.closed && !this.busy && now - this.lastAt >= interval

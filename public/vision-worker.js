@@ -1,14 +1,14 @@
 'use strict';
 
 // Classic worker: MediaPipe's WASM loader needs importScripts().
-importScripts('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.js');
+importScripts(new URL('vendor/mediapipe/vision_bundle.js', self.location.href).href);
 let detector;
 let kind;
 self.onmessage = async ({ data: message }) => {
   try {
     if (message.type === 'init') {
       kind = message.kind;
-      const files = await Vision.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm');
+      const files = await Vision.FilesetResolver.forVisionTasks(new URL('vendor/mediapipe/wasm', self.location.href).href);
       detector = kind === 'hand'
         ? await Vision.HandLandmarker.createFromOptions(files, {
           baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate: 'CPU' },

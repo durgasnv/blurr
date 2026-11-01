@@ -9,8 +9,8 @@ export class MouthTracker {
 
   private constructor(detector: DetectorClient<Detection[]>) { this.detector = detector; }
 
-  static async create() {
-    const detector = await DetectorClient.create<Detection[]>('face');
+  static async create(signal?: AbortSignal) {
+    const detector = await DetectorClient.create<Detection[]>('face', signal);
     return new MouthTracker(detector);
   }
 

@@ -2,7 +2,7 @@
 
 ## Startup and privacy
 
-`App.tsx` owns the permission button and the experience stages. A user click requests a front-facing camera and microphone with `getUserMedia()`. The live camera video becomes the visible mirror reflection through a Three.js `VideoTexture`, and MediaPipe's Hand Landmarker reads the same video element. A Web Audio source reads microphone samples. Audio and video stay in the browser. The hand model and WASM runtime load from hosted URLs after permission is granted.
+`App.tsx` owns the permission button and the experience stages. A user click requests a front-facing camera and microphone with `getUserMedia()`. The live camera video becomes the visible mirror reflection through a Three.js `VideoTexture`, and MediaPipe's Hand Landmarker reads the same video element. A Web Audio source reads microphone samples. Audio and video stay in the browser. Models download from Google after permission is granted; the installed npm bundle and WASM runtime are copied into site assets during development/build preparation.
 
 The Three.js glass and MediaPipe tracker are loaded as separate JavaScript chunks. If startup is interrupted, the media tracks, audio context, and tracker are released. If WebGL cannot start, the existing Canvas 2D fog and mirrored video provide a fallback. `?debug` works only with Vite's development build.
 
@@ -32,4 +32,4 @@ The Three.js glass and MediaPipe tracker are loaded as separate JavaScript chunk
 
 ## Interface
 
-`src/components/ExperienceOverlay.tsx` shows a minimal permission screen and short onboarding phrases. GSAP fades between phrases. A gesture label appears briefly, then disappears. Rare drawing and idle messages are driven by activity in `App.tsx`. Optional brush and shutter controls appear after permission; Space, C, S, and Esc are optional shortcuts. `src/components/DebugPanel.tsx` is available only in development mode.
+`src/components/ExperienceOverlay.tsx` shows a minimal permission screen and short onboarding phrases. GSAP fades between phrases. A gesture label appears briefly, then disappears. Rare drawing and idle messages are driven by activity in `App.tsx`. Optional brush and shutter controls appear after permission; a visible cancel/stop button releases media and tracking resources. Space, C, S, and Esc are optional shortcuts. `src/components/DebugPanel.tsx` is available only in development mode.

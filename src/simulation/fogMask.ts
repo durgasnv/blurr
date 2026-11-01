@@ -30,6 +30,8 @@ export class FogMask {
     fragmentShader: `${noiseShader}\n${fragmentShader}`,
     uniforms: {
       uPrevious: { value: null },
+      uQuantize: { value: 0 },
+      uStepSeed: { value: 0 },
       uGrowth: { value: 0 },
       uBlowRadius: { value: 0.15 },
       uBlowCenter: { value: new Vector2(0.5, 0.48) },
@@ -53,6 +55,7 @@ export class FogMask {
     this.renderer = renderer;
     this.scale = scale;
     this.floatTarget = renderer.extensions.has('EXT_color_buffer_float');
+    this.material.uniforms.uQuantize.value = this.floatTarget ? 0 : 1;
     this.camera.position.z = 1;
     this.material.uniforms.uAspect.value = width / Math.max(1, height);
     this.scene.add(new Mesh(this.geometry, this.material));
@@ -126,6 +129,7 @@ export class FogMask {
 
   private step() {
     this.material.uniforms.uPrevious.value = this.read.texture;
+    this.material.uniforms.uStepSeed.value = (this.material.uniforms.uStepSeed.value + 1) % 4096;
     const previousTarget = this.renderer.getRenderTarget();
     this.renderer.setRenderTarget(this.write);
     this.renderer.render(this.scene, this.camera);

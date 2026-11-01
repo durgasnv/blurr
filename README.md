@@ -5,22 +5,22 @@ A small touchless glass experience. Enable the camera and microphone, blow gentl
 ## Run
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-Open the local address shown by Vite. Use `npm run build` for a production build. Media permissions require localhost or HTTPS. The MediaPipe model and WASM runtime are fetched after permission is granted, so the first launch needs an internet connection.
+Open the local address shown by Vite. Use `npm run build` for a production build. Media permissions require localhost or HTTPS. The MediaPipe runtime is served with the site; models download from Google after permission is granted, so the first launch needs an internet connection. Use Node 22 or newer.
 
 ## Interaction
 
-1. Select **enable camera + mic**. This is the only required pointer or keyboard action.
+1. Select **enable camera + mic**, then hold an open hand at a comfortable distance for one second to calibrate. You can cancel loading or stop the camera and microphone with the button at the top right.
 2. Blow steadily toward the microphone. Brief clicks and claps should not build significant fog.
 3. Point one index finger toward the camera and move your hand closer to the glass, or pinch thumb and index finger together, to draw in the air. A fist wipes a wider area.
 4. Wait for the path to refog, or blow again to add more condensation. Fog growth pauses while you draw or wipe.
 
 The bottom-left brush slider adjusts the drawing radius from 7 to 38 pixels; the shutter button saves a PNG. Optional keyboard shortcuts: hold Space to demonstrate breath without sound, C to clear drawing, S to save, and Esc to return to the start screen. Drawing itself needs no pointer or keyboard input.
 
-The camera supplies both the visible mirrored reflection and hand tracking. Its image appears through the V2 glass, rather than in a separate webcam rectangle. Camera and microphone data are processed on the device; neither recordings nor landmarks are uploaded. The model and runtime are downloaded from hosted URLs.
+The camera supplies both the visible mirrored reflection and hand tracking. Its image appears through the V2 glass, rather than in a separate webcam rectangle. Camera and microphone data are processed on the device; neither recordings nor landmarks are uploaded. Models download from Google; the runtime is served from the site.
 
 Development mode supports `?debug` for a camera preview, hand landmarks, fingertip marker, gesture, blow readings, and FPS. The debug overlay is disabled in production builds.
 
@@ -36,3 +36,9 @@ See [the V2 architecture](docs/architecture.md), [the V1 comparison](docs/v1-to-
 - One hand is tracked at a time; occlusion and strong backlighting can interrupt a stroke.
 - WebGL and MediaPipe performance vary by device. Visual quality and the hand-to-glass feel still need a real camera and microphone check.
 - If the optional face model cannot load, breath still fogs the center of the glass.
+
+## Deployment and checks
+
+Run `npm run check` for regression tests, TypeScript checks, and the production build. Run `npx playwright install chromium` once, then `npm run test:browser` for production browser smoke checks. GitHub Actions runs both on pushes and pull requests.
+
+Publish the complete `dist/` directory over HTTPS. See [deployment instructions](docs/deployment.md) and [the repository review and remaining launch checks](docs/deployment-review.md).

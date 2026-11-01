@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { FogCanvas } from './lib/fog';
 import type { HandTracker, HandState, CalibrationPhase } from './lib/hand';
 import type { MouthTracker } from './vision/mouthTracker';
@@ -9,6 +9,13 @@ import { DebugPanel, type DebugPanelHandle } from './components/DebugPanel';
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
 
 const GlassSurface = lazy(async () => ({ default: (await import('./components/GlassSurface')).GlassSurface }));
+
+// A failed optional renderer download must leave the video/Canvas mirror usable.
+class RendererBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() { return this.state.failed ? null : this.props.children; }
+}
 
 export default function App() {
   const canvasRef          = useRef<HTMLCanvasElement>(null);
@@ -26,6 +33,8 @@ export default function App() {
   const mouthRef           = useRef<MouthTracker | null>(null);
   const breathRef          = useRef<BlowDetector | null>(null);
   const streamRef          = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const startupAbortRef = useRef<AbortController | null>(null);
   const startupRef         = useRef(0);
   const stageRef           = useRef<Stage>('intro');
   const lastPointRef       = useRef(false);
@@ -33,6 +42,7 @@ export default function App() {
   const revealAtRef        = useRef(0);
   const lastFrameRef       = useRef(0);
   const webglReadyRef      = useRef(false);
+  const gestureHiddenRef = useRef(false);
   const firstDrawShownRef  = useRef(false);
   const artistShownRef     = useRef(false);
   const idleShownRef       = useRef(false);
@@ -50,6 +60,7 @@ export default function App() {
   const [stage, setStage]             = useState<Stage>('intro');
   const [touchState, setTouchState]   = useState<'HOVER' | 'TOUCHING_GLASS' | 'NO_HAND'>('NO_HAND');
   const [showGesture, setShowGesture] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError]             = useState('');
   const [cameraReady, setCameraReady] = useState(false);
   const [webglReady, setWebglReady]   = useState(false);
@@ -167,6 +178,8 @@ export default function App() {
 
   const returnToStart = () => {
     startupRef.current++;
+    startupAbortRef.current?.abort();
+    startupAbortRef.current = null;
     streamRef.current?.getTracks().forEach(track => track.stop());
     streamRef.current = null;
     trackerRef.current?.close();
@@ -175,6 +188,8 @@ export default function App() {
     mouthRef.current = null;
     void breathRef.current?.close();
     breathRef.current = null;
+    if (audioContextRef.current?.state !== 'closed') void audioContextRef.current?.close().catch(() => undefined);
+    audioContextRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     if (debugVideoRef.current) debugVideoRef.current.srcObject = null;
     demoBreathRef.current = false;
@@ -185,11 +200,19 @@ export default function App() {
     artistShownRef.current = false;
     idleShownRef.current = false;
     hasMistRef.current = false;
+    touchStateRef.current = 'NO_HAND';
+    setTouchState('NO_HAND');
+    totalDrawMsRef.current = 0;
+    lastHandAtRef.current = 0;
+    whisperRef.current = '';
+    debugHandRef.current = null;
     fogRef.current?.clearDrawing();
     fogRef.current?.setIntensity(0);
     glassRef.current?.reset();
     setCameraReady(false);
+    setError('');
     setHasMist(false);
+    gestureHiddenRef.current = false;
     setShowGesture(true);
     setWhisper('');
     changeStage('intro');
@@ -218,7 +241,9 @@ export default function App() {
     window.addEventListener('resize', resize);
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { returnToStart(); return; }
-      if (!streamRef.current || event.target instanceof HTMLInputElement) return;
+      if (!streamRef.current || event.ctrlKey || event.metaKey || event.altKey
+        || event.target instanceof HTMLInputElement || event.target instanceof HTMLButtonElement
+        || (event.target instanceof HTMLElement && event.target.isContentEditable)) return;
       if (event.code === 'Space') {
         event.preventDefault();
         if (!demoBreathRef.current) demoSinceRef.current = performance.now();
@@ -233,6 +258,10 @@ export default function App() {
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.code === 'Space') demoBreathRef.current = false;
     };
+    const releaseDemo = () => { demoBreathRef.current = false; };
+    const onPageHide = () => returnToStart();
+    window.addEventListener('blur', releaseDemo);
+    window.addEventListener('pagehide', onPageHide);
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
@@ -241,12 +270,28 @@ export default function App() {
       const dt    = lastFrameRef.current ? Math.min(60, now - lastFrameRef.current) : 16;
       lastFrameRef.current = now;
 
-      const hand = trackerRef.current?.update(now);
-      if (mouthRef.current && videoRef.current) {
-        glassRef.current?.setBreathCenter(mouthRef.current.update(videoRef.current, now));
+      let hand: HandState | null | undefined;
+      try {
+        hand = trackerRef.current?.update(now);
+      } catch (cause) {
+        console.warn('Hand tracking stopped.', cause);
+        returnToStart();
+        setError('Hand tracking stopped. Enable the camera and microphone to try again.');
+        changeStage('error');
       }
-      const interacting = !!(hand?.visible && (hand.touching || hand.wiping))
-        || (hand === null && (lastPointRef.current || lastWipeRef.current) && now - lastHandAtRef.current < 250);
+      if (mouthRef.current && videoRef.current) {
+        try {
+          glassRef.current?.setBreathCenter(mouthRef.current.update(videoRef.current, now));
+        } catch (cause) {
+          console.warn('Mouth tracking unavailable; breath stays centered.', cause);
+          mouthRef.current.close();
+          mouthRef.current = null;
+          glassRef.current?.setBreathCenter({ x: 0.5, y: 0.52 });
+        }
+      }
+      const canDraw = stageRef.current === 'raise' || stageRef.current === 'draw' || stageRef.current === 'experience';
+      const interacting = canDraw && (!!(hand?.visible && (hand.touching || hand.wiping))
+        || (hand === null && (lastPointRef.current || lastWipeRef.current) && now - lastHandAtRef.current < 250));
       glassRef.current?.setDrawing(interacting);
 
       // --- breath ---
@@ -259,7 +304,7 @@ export default function App() {
         lastActivityRef.current = now;
         idleShownRef.current    = false;
         if (whisperRef.current) showWhisper('', now, 0);
-      } else if (!interacting && fog.intensity > 0) {
+      } else if (!webglReadyRef.current && !interacting && fog.intensity > 0) {
         fog.setIntensity(fog.intensity - dt * 0.0000007);
       }
       if (!interacting) glassRef.current?.addBreath(breath, dt, blowDuration);
@@ -318,12 +363,12 @@ export default function App() {
       }
 
       // --- drawing: only when TOUCHING_GLASS and fog exists ---
-      if (hand?.visible && hand.wiping && fog.intensity > 0.03) {
+      if (canDraw && hand?.visible && hand.wiping && fog.intensity > 0.03) {
         glassRef.current?.wipeAt(hand, hand.wipeRadius, now, lastWipeRef.current);
         if (!webglReadyRef.current) fog.addWipePoint(hand.x, hand.y, now, lastWipeRef.current, hand.wipeRadius * window.innerHeight);
         lastWipeRef.current = true;
         lastPointRef.current = false;
-      } else if (hand?.visible && hand.touching && fog.intensity > 0.03) {
+      } else if (canDraw && hand?.visible && hand.touching && fog.intensity > 0.03) {
         totalDrawMsRef.current += lastHandAtRef.current ? Math.min(100, now - lastHandAtRef.current) : 0;
         glassRef.current?.drawAt(hand, now, lastPointRef.current, brushSizeRef.current);
         if (!webglReadyRef.current) fog.addPoint(hand.x, hand.y, now, lastPointRef.current, brushSizeRef.current);
@@ -335,7 +380,10 @@ export default function App() {
           revealAtRef.current = now;
         }
         if (stageRef.current === 'draw' && now - revealAtRef.current > 1800) changeStage('experience');
-        if (now - revealAtRef.current > 5200) setShowGesture(false);
+        if (!gestureHiddenRef.current && now - revealAtRef.current > 5200) {
+          gestureHiddenRef.current = true;
+          setShowGesture(false);
+        }
 
         if (!firstDrawShownRef.current && totalDrawMsRef.current > 950) {
           firstDrawShownRef.current = true;
@@ -364,6 +412,9 @@ export default function App() {
 
     return () => {
       startupRef.current++;
+      startupAbortRef.current?.abort();
+      window.removeEventListener('blur', releaseDemo);
+      window.removeEventListener('pagehide', onPageHide);
       cancelAnimationFrame(frame);
       window.removeEventListener('resize', resize);
       window.removeEventListener('keydown', onKeyDown);
@@ -372,10 +423,12 @@ export default function App() {
       trackerRef.current?.close();
       mouthRef.current?.close();
       void breathRef.current?.close();
+      if (audioContextRef.current?.state !== 'closed') void audioContextRef.current?.close().catch(() => undefined);
     };
   }, []);
 
   async function enable() {
+    if (stageRef.current === 'loading') return;
     if (!navigator.mediaDevices?.getUserMedia) {
       setError('This browser needs a secure connection and camera/microphone support. Open the site on HTTPS or localhost.');
       changeStage('error');
@@ -383,17 +436,42 @@ export default function App() {
     }
     const startup = ++startupRef.current;
     const stale   = () => startup !== startupRef.current;
+    const controller = new AbortController();
+    startupAbortRef.current = controller;
+    setError('');
     changeStage('loading');
+    setLoadingMessage('Allow camera and microphone access in your browser.');
+    let startupStep = 'camera and microphone permissions';
+    const timeout = window.setTimeout(() => {
+      if (stale()) return;
+      returnToStart();
+      setError(`Timed out waiting for ${startupStep}. Check browser permissions and your connection, then try again.`);
+      changeStage('error');
+    }, 75000);
+    controller.signal.addEventListener('abort', () => window.clearTimeout(timeout), { once: true });
     try {
+      // Unlock audio during the click, before permission/video awaits consume user activation.
+      const audioContext = new AudioContext();
+      audioContextRef.current = audioContext;
+      const audioStarted = audioContext.resume();
+      void audioStarted.catch(() => undefined);
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
       if (stale()) { stream.getTracks().forEach(t => t.stop()); return; }
       streamRef.current = stream;
+      for (const track of stream.getTracks()) track.addEventListener('ended', () => {
+        if (stale()) return;
+        returnToStart();
+        setError('The camera or microphone disconnected. Reconnect it, then try again.');
+        changeStage('error');
+      }, { once: true });
       const video = videoRef.current;
       if (!video) throw new Error('Mirror closed before the camera started');
       video.srcObject = stream;
+      startupStep = 'the camera preview';
+      setLoadingMessage('Starting your camera…');
       await video.play();
       if (stale()) return;
       setCameraReady(true);
@@ -406,21 +484,26 @@ export default function App() {
         debugCursorRef.current.width  = window.innerWidth;
         debugCursorRef.current.height = window.innerHeight;
       }
-      const breath = new BlowDetector(stream);
+      startupStep = 'microphone audio';
+      setLoadingMessage('Starting your microphone…');
+      const breath = new BlowDetector(stream, audioContext);
       breathRef.current = breath;
-      await breath.resume();
+      await audioStarted;
       if (stale()) return;
 
+      startupStep = 'the hand-tracking model';
+      setLoadingMessage('Loading hand tracking. The first download may take a minute…');
       const { HandTracker: Tracker } = await import('./lib/hand');
       if (stale()) return;
       const tracker = await Tracker.create(
         video,
         debug ? drawDebugLandmarks : undefined,
         onCalibrationPhase,
+        controller.signal,
       );
       if (stale()) { tracker.close(); return; }
       trackerRef.current = tracker;
-      void import('./vision/mouthTracker').then(({ MouthTracker: Tracker }) => Tracker.create()).then(face => {
+      void import('./vision/mouthTracker').then(({ MouthTracker: Tracker }) => Tracker.create(controller.signal)).then(face => {
         if (stale()) face.close();
         else mouthRef.current = face;
       }).catch(cause => console.warn('Mouth tracking unavailable; breath stays centered.', cause));
@@ -428,20 +511,18 @@ export default function App() {
       changeStage('calibrate');
     } catch (cause) {
       if (stale()) return;
-      streamRef.current?.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-      if (videoRef.current) videoRef.current.srcObject = null;
-      if (debugVideoRef.current) debugVideoRef.current.srcObject = null;
-      setCameraReady(false);
-      await breathRef.current?.close();
-      breathRef.current = null;
+      console.error(`Startup failed during ${startupStep}`, cause);
+      returnToStart();
       const name = cause instanceof DOMException ? cause.name : '';
       setError(
         name === 'NotAllowedError' ? 'Camera or microphone access was denied. Allow both in your browser settings, then try again.'
+        : name === 'NotReadableError' ? 'The camera or microphone is in use or unavailable. Close other camera apps, then try again.'
         : name === 'NotFoundError' ? 'A camera and microphone are both needed. Connect them, then try again.'
-        : 'The camera, microphone, or hand model could not start. Check your connection and try again.',
+        : `Could not start ${startupStep}. Check your connection and try again.`,
       );
       changeStage('error');
+    } finally {
+      window.clearTimeout(timeout);
     }
   }
 
@@ -458,9 +539,11 @@ export default function App() {
         muted playsInline autoPlay aria-hidden="true"
       />
       <div className="mirror-shade" aria-hidden="true" />
-      <Suspense fallback={null}>
-        <GlassSurface ref={glassRef} debug={debug} onReady={onWebglReady} video={videoRef} />
-      </Suspense>
+      <RendererBoundary>
+        <Suspense fallback={null}>
+          <GlassSurface ref={glassRef} debug={debug} onReady={onWebglReady} video={videoRef} />
+        </Suspense>
+      </RendererBoundary>
       <canvas
         ref={canvasRef}
         className={`fog-canvas${webglReady ? ' is-fallback-hidden' : ''}`}
@@ -478,11 +561,17 @@ export default function App() {
         stage={stage}
         hasMist={hasMist}
         error={error}
+        loadingMessage={loadingMessage}
         touchState={touchState}
         showGesture={showGesture}
         whisper={whisper}
         onEnable={enable}
       />
+      {stage !== 'intro' && stage !== 'error' && (
+        <button className="stop-button" type="button" onClick={returnToStart}>
+          {stage === 'loading' ? 'cancel' : 'stop camera + mic'}
+        </button>
+      )}
       {cameraReady && stage !== 'intro' && stage !== 'error' && (
         <>
           <label className="brush-control">

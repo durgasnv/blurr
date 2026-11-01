@@ -14,6 +14,13 @@ export class DropletSimulation {
     this.maxActive = Math.min(MAX_DROPS, maxActive);
   }
 
+  reset() {
+    this.count = 0;
+    this.spawnClock = 0;
+    this.velocity.fill(0);
+    for (const position of this.positions) position.set(-10, -10, 0);
+  }
+
   update(seconds: number, fogAmount: number) {
     const dt = Math.min(seconds, 0.1);
     if (fogAmount > 0.12) {

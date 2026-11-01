@@ -14,6 +14,7 @@ import fragmentShader from '../shaders/glass.frag?raw';
 import noiseShader from '../shaders/noise.glsl?raw';
 import backgroundShader from '../shaders/background.glsl?raw';
 import { FogMask } from '../simulation/fogMask';
+import { CameraDiffusion } from '../simulation/cameraDiffusion';
 import { DropletSimulation } from '../simulation/droplets';
 import { forEachStamp } from '../simulation/stamps';
 import { viewportToGlassUv, type GlassUv, type ViewportPoint } from '../vision/coordinateMapper';
@@ -67,6 +68,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       return;
     }
 
+    canvas.style.visibility = 'visible';
     renderer.setClearColor(0x000000, 0);
     const bounds = canvas.parentElement?.getBoundingClientRect();
     const quality = chooseQuality(
@@ -82,12 +84,14 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     camera.position.z = 1;
     const geometry = new PlaneGeometry(2, 2);
     const cameraTexture = video.current ? new VideoTexture(video.current) : null;
+    const diffusion = new CameraDiffusion(renderer);
     const material = new ShaderMaterial({
       vertexShader,
       fragmentShader: `${noiseShader}\n${backgroundShader}\n${fragmentShader}`,
       uniforms: {
         uFogMask: { value: fogMask.texture },
         uCamera: { value: cameraTexture },
+        uDiffusedCamera: { value: diffusion.texture },
         uHasCamera: { value: 0 },
         uVideoCrop: { value: new Vector2(1, 1) },
         uTime: { value: 0 },
@@ -106,6 +110,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     let latestDuration = 0;
     let estimatedFog = 0;
     let lastRenderAt = 0;
+    let contextLost = false;
     let wetUntil = 0;
     let lastDrawUv: GlassUv | null = null;
     let lastDrawAt = 0;
@@ -176,8 +181,15 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     };
     resetRef.current = () => {
       fogMask.reset();
+      droplets.reset();
+      material.uniforms.uDropCount.value = 0;
+      material.uniforms.uFinger.value.set(-1, -1);
+      fogMask.setBlowCenter({ x: 0.5, y: 0.48 });
       estimatedFog = 0;
       pendingGrowth = 0;
+      latestDuration = 0;
+      wetUntil = 0;
+      isDrawing = false;
       lastDrawUv = null;
       lastWipePoint = null;
       material.uniforms.uFogMask.value = fogMask.texture;
@@ -193,7 +205,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     };
 
     renderer.setAnimationLoop(now => {
-      if (document.hidden || now - lastRenderAt < quality.frameInterval) return;
+      if (contextLost || document.hidden || now - lastRenderAt < quality.frameInterval) return;
       const frameMs = lastRenderAt ? Math.min(100, now - lastRenderAt) : quality.frameInterval;
       lastRenderAt = now;
       const cameraVideo = video.current;
@@ -204,6 +216,9 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
         updateVideoCrop();
       }
       material.uniforms.uHasCamera.value = hasCamera ? 1 : 0;
+      if (hasCamera && cameraTexture && cameraVideo) {
+        diffusion.update(cameraTexture, cameraVideo.currentTime, material.uniforms.uVideoCrop.value);
+      }
       const growing = !isDrawing && ++breathFrame % 2 === 0
         && pendingGrowth >= fogMask.minimumStep && pendingGrowth > 0;
       const wetDecay = now < wetUntil ? frameMs * 0.00018 : 0;
@@ -234,6 +249,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       renderer.setSize(width, height, false);
       material.uniforms.uAspect.value = width / height;
       fogMask.resize(width, height);
+      diffusion.resize(width, height);
       material.uniforms.uFogMask.value = fogMask.texture;
       renderer.render(scene, camera);
     };
@@ -243,10 +259,16 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
     window.addEventListener('resize', resize);
     const onContextLost = (event: Event) => {
       event.preventDefault();
+      contextLost = true;
+      canvas.style.visibility = 'hidden';
       onReady(false);
     };
     const onContextRestored = () => {
+      contextLost = false;
+      resetRef.current();
+      diffusion.resize(viewportWidth, viewportHeight);
       resize();
+      canvas.style.visibility = 'visible';
       onReady(true);
     };
     canvas.addEventListener('webglcontextlost', onContextLost);
@@ -273,6 +295,7 @@ export const GlassSurface = forwardRef<GlassSurfaceHandle, { debug: boolean; onR
       geometry.dispose();
       material.dispose();
       cameraTexture?.dispose();
+      diffusion.dispose();
       fogMask.dispose();
       renderer.dispose();
     };

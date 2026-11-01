@@ -24,6 +24,13 @@ export function isIndexExtended(landmarks: NormalizedLandmark[]): boolean {
   return distance(landmarks[8], landmarks[0]) > distance(landmarks[6], landmarks[0]);
 }
 
+/** Proximity drawing needs an index-only pose; an open palm is a pause. */
+export function isPointing(landmarks: NormalizedLandmark[]): boolean {
+  return isIndexExtended(landmarks) && [[12, 10], [16, 14], [20, 18]].every(([tip, middle]) =>
+    distance(landmarks[tip], landmarks[0]) <= distance(landmarks[middle], landmarks[0]) * 1.08,
+  );
+}
+
 export class HandIntentTracker {
   private drawing = false;
   private releaseFrames = 0;

@@ -27,8 +27,8 @@ export class BlowDetector {
     highRatio: 0,
   };
 
-  constructor(stream: MediaStream) {
-    this.context = new AudioContext();
+  constructor(stream: MediaStream, context = new AudioContext()) {
+    this.context = context;
     this.source = this.context.createMediaStreamSource(stream);
     this.analyser = this.context.createAnalyser();
     this.analyser.fftSize = 2048;
@@ -83,6 +83,6 @@ export class BlowDetector {
   async close() {
     window.removeEventListener('keydown', this.onKeydown);
     this.source.disconnect();
-    await this.context.close();
+    if (this.context.state !== 'closed') await this.context.close().catch(() => undefined);
   }
 }

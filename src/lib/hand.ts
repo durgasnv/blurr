@@ -1,7 +1,7 @@
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
 import { DetectorClient } from '../vision/detectorClient';
 import { measureHandScale, ProximityTracker, type HandGesture } from '../vision/gestures';
-import { handWidth, HandIntentTracker, isIndexExtended, type HandIntent } from '../vision/handIntent';
+import { handWidth, HandIntentTracker, isPointing, type HandIntent } from '../vision/handIntent';
 
 export type { HandGesture };
 
@@ -68,8 +68,9 @@ export class HandTracker {
     video: HTMLVideoElement,
     onLandmarks?: (landmarks: NormalizedLandmark[] | null, video: HTMLVideoElement) => void,
     onCalibrationPhase?: (phase: CalibrationPhase) => void,
+    signal?: AbortSignal,
   ) {
-    const landmarker = await DetectorClient.create<NormalizedLandmark[][]>('hand');
+    const landmarker = await DetectorClient.create<NormalizedLandmark[][]>('hand', signal);
     return new HandTracker(landmarker, video, onLandmarks, onCalibrationPhase);
   }
 
@@ -156,8 +157,7 @@ export class HandTracker {
     }
     this.lastTime = now;
     const intent = this.intentTracker.update(landmarks);
-    if (intent === 'WIPE' || touchState === 'HOVER') this.proximityPen = false;
-    else if (!this.proximityPen && isIndexExtended(landmarks)) this.proximityPen = true;
+    this.proximityPen = intent !== 'WIPE' && touchState === 'TOUCHING_GLASS' && isPointing(landmarks);
     if (intent === 'WIPE') {
       this.drawingHeld = false;
       this.releasedFrames = 0;
@@ -177,7 +177,7 @@ export class HandTracker {
       visible:   inside,
       handScale,
       proximity: this.proximity.proximity,
-      state:     touchState,
+      state:     this.drawingHeld || intent === 'WIPE' ? 'TOUCHING_GLASS' : 'HOVER',
       intent,
       wiping:   intent === 'WIPE',
       wipeRadius,

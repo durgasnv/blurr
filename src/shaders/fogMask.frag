@@ -1,4 +1,6 @@
 uniform sampler2D uPrevious;
+uniform float uQuantize;
+uniform float uStepSeed;
 uniform float uGrowth;
 uniform float uBlowRadius;
 uniform vec2 uBlowCenter;
@@ -24,17 +26,12 @@ void main() {
     wet = 0.0;
   }
   if (uGrowth > 0.0) {
-    float blobs = 0.0;
-    for (int i = 0; i < 12; i++) {
-      float index = float(i);
-      vec2 random = vec2(hash21(vec2(uBlowSeed, index)), hash21(vec2(index + 19.0, uBlowSeed)));
-      vec2 offset = (random - 0.5) * vec2(1.45 / uAspect, 1.0) * uBlowRadius * 1.1;
-      vec2 delta = (vUv - uBlowCenter - offset) * vec2(uAspect / 1.45, 1.0);
-      float radius = uBlowRadius * mix(0.20, 0.48, hash21(random + index));
-      blobs += (1.0 - smoothstep(radius * 0.40, radius, length(delta))) * 0.36;
-    }
-    float coverage = mix(0.55, 1.25, fbm(vUv * 5.3 + vec2(4.2, 8.1)));
-    fog = clamp(fog + uGrowth * min(3.0, blobs) * coverage, 0.0, 1.0);
+    // A continuous breath footprint deposits moisture on a fixed surface.
+    // Broad coverage and a soft perimeter avoid individual smoke-like puffs.
+    vec2 delta = (vUv - uBlowCenter) * vec2(uAspect / 1.45, 1.0);
+    float footprint = 1.0 - smoothstep(uBlowRadius * 0.35, uBlowRadius, length(delta));
+    float coverage = mix(0.96, 1.04, valueNoise(vUv * vec2(uAspect, 1.0) * 140.0));
+    fog = clamp(fog + uGrowth * footprint * coverage * 1.8, 0.0, 1.0);
   }
   memory = max(memory, fog);
   if (uRegeneration > 0.0) {
@@ -59,5 +56,11 @@ void main() {
   float rim = smoothstep(uEraseRadius * 0.64, uEraseRadius * 0.93, distanceToStroke)
     * (1.0 - smoothstep(uEraseRadius * 0.94, uEraseRadius * 1.42, distanceToStroke));
   wet = max(wet, rim * uEraseStrength * 0.72);
-  gl_FragColor = vec4(fog, wet, memory, 1.0);
+  vec3 state = clamp(vec3(fog, wet, memory), 0.0, 1.0);
+  if (uQuantize > 0.5) {
+    // Unbiased rounding lets sub-byte growth, decay and refill accumulate.
+    float threshold = hash21(gl_FragCoord.xy + vec2(uStepSeed * 13.7, uStepSeed * 3.1));
+    state = floor(state * 255.0 + threshold) / 255.0;
+  }
+  gl_FragColor = vec4(state, 1.0);
 }
